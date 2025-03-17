@@ -1,11 +1,10 @@
 import torch
 import torch.nn as nn
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib import cm
 from tqdm import tqdm
-import ot
 import copy
+
+from Utilities import *
 
 if torch.cuda.is_available():
     device = torch.device('cuda')
@@ -103,6 +102,20 @@ class SHLFeatureModel(nn.Module):
     def forward(self, x):
         return self.activation(nn.functional.linear(x, self.weight, self.bias))
     
+class SignedSHLFeatureModel(nn.Module):
+    def __init__(self, input_dim, width, activation, bias=False):
+        super().__init__()
+        self.weight = nn.Parameter(data=torch.randn(width, input_dim), requires_grad=True)
+        self.sign = nn.Parameter(data=torch.randn(width), requires_grad=True)
+        self.activation = activation
+        if bias:
+            self.bias = nn.Parameter(data=torch.zeros(width), requires_grad=True)
+        else:
+            self.bias = None
+
+    def forward(self, x):
+        return self.activation(nn.functional.linear(x, self.weight, self.bias)) @ torch.diag(self.sign)
+    
 # feature model for a convolution
 class ConvolutionFeatureModel(nn.Module):
     def __init__(self, input_dim, width, activation, scale):
@@ -114,18 +127,19 @@ class ConvolutionFeatureModel(nn.Module):
     def forward(self, x):
         return self.activation(torch.linalg.vector_norm(self.weight.T[None,:,:] - x[:,:,None], dim=1) / self.scale)
 
+## Models constructors
 def SHL(input_dim, width, activation, bias=False, VarProTraining=True, clipper=None):
     feature_model = SHLFeatureModel(input_dim, width, activation, bias=bias)
+    return VarProModel(feature_model, width, 1, VarProTraining=VarProTraining, clipper=clipper)
+
+def SignedSHL(input_dim, width, activation, bias=False, VarProTraining=True, clipper=None):
+    feature_model = SignedSHLFeatureModel(input_dim, width, activation, bias=bias)
     return VarProModel(feature_model, width, 1, VarProTraining=VarProTraining, clipper=clipper)
 
 def Convolution(input_dim, width, activation, scale, VarProTraining=True, clipper=None):
     feature_model = ConvolutionFeatureModel(input_dim, width, activation, scale)
     return VarProModel(feature_model, width, 1, VarProTraining=VarProTraining, clipper=clipper)
 
-
-def freeze(module):
-    for p in module.parameters():
-        p.requires_grad = False
 
 ## Criterions
 # perform projection on the outer layer
@@ -197,6 +211,23 @@ class PeriodicBoundaryCondition():
 
     def __call__(self, w):
         return self.x_min + (w-self.x_min) % (self.x_max-self.x_min)
+    
+# thresholding weights value
+class Thresholding():
+    def __init__(self, x_min=-1, x_max=1):
+        self.x_min = x_min
+        self.x_max = x_max
+
+    def __call__(self, w):
+        return pmax(pmin(w, self.x_max), self.x_min)
+    
+class BallClipper():
+    def __init__(self, radius=1):
+        self.radius = radius
+
+    def __call__(self, w):
+        norm = w.norm(dim=1, keepdim=True).expand_as(w)
+        return (w / norm) * pmin(norm, self.radius)
 
 # apply a clipping function to the features
 class FeatureClipper():
@@ -221,104 +252,15 @@ class FeatureBiasClipper():
         w.copy_(self.weight_clipper(w))
         b.copy_(self.bias_clipper(b))
 
-## Distance functions
-
-class GaussianKernel():
-    def __init__(self, gamma=1):
-        self.gamma = gamma
+# Apply clipping function on feature model weights and signs (only for SignedSHL)
+class FeatureSignClipper():
+    def __init__(self, weight_clipper, sign_clipper):
+        self.weight_clipper = weight_clipper
+        self.sign_clipper = sign_clipper
         
-    def __call__(self, x):
-        return torch.exp(- 0.5 * x.norm(dim=-1)**2 / self.gamma**2)
-
-class EnergyKernel():
-    def __call__(self, x):
-        return -x.norm(dim=-1)
-
-class DistanceMMD():
-    def __init__(self, kernel=EnergyKernel(), projection=nn.Identity()):
-        self.kernel = kernel
-        self.projection = projection
-
-    def __call__(self, m1, c1, m2, c2):
-        K1 = self.kernel(self.projection(m1[:,None,:] - m1[None,:,:]))
-        K2 = self.kernel(self.projection(m2[:,None,:] - m2[None,:,:]))
-        K3 = self.kernel(self.projection(m1[:,None,:] - m2[None,:,:]))
-        return ( c1.dot(K1 @ c1) + c2.dot(K2 @ c2) - 2 * c1.dot(K3 @ c2) ).sqrt()
-
-class DistanceOT():
-    def __init__(self, projection=nn.Identity()):
-        self.projection = projection
-
-    def __call__(self, m1, c1, m2, c2):
-        M = (self.projection(m1[:,None,:] - m2[None,:,:])**2).sum(dim=-1).numpy()
-        return np.sqrt(ot.emd2(c1.numpy(), c2.numpy(), M))
-
-def compute_distance(distance, weight_list, weight_ref, c_ref=None, c_list=None, N_eval=100, progress=True):
-    # uniform coefficients
-    if c_ref is None:
-        c_ref = torch.ones(weight_ref.shape[0]) / weight_ref.shape[0]
-    if c_list is None:
-        c = torch.ones(weight_list[0].shape[0]) / weight_list[0].shape[0]
-        c_list = [c for _ in weight_list]
-    
-    distance_list = []
-    idx = np.array([int(i) for i in np.linspace(0, len(weight_list)-1, N_eval+1)])
-    iterator = tqdm(idx) if progress else idx
-    for i in iterator:
-        distance_list.append(distance(weight_ref, c_ref, weight_list[i], c_list[i]).item())
-    return distance_list, idx
-
-## Utilities
-def add_one_row(x):
-    return torch.cat((x, torch.ones(x.shape[0]).view((x.shape[0],1))), dim=1)
-
-def model_plot_2d(model, add_one=False, N_points=100, x_lim=(-5,5)): ## Data plot
-    x = np.linspace(*x_lim, N_points)
-    y = np.linspace(*x_lim, N_points)
-    xx, yy = np.meshgrid(x, y)
-    if add_one:
-        inputs = torch.tensor(np.stack((xx.flatten(), yy.flatten(), np.ones(N_points**2))), dtype=torch.float32).T
-    else:
-        inputs = torch.tensor(np.stack((xx.flatten(), yy.flatten())), dtype=torch.float32).T
-    zz = model(inputs).detach().view((N_points, N_points)).numpy()
-    fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
-    surf = ax.plot_surface(xx, yy, zz, linewidth=0, antialiased=False, cmap=cm.coolwarm)
-    fig.colorbar(surf)
-    plt.show()
-
-def model_plot_1d(model, add_one=False, N_points=1000, x_lim=(-10,10)): ## Data plot
-    x = np.linspace(*x_lim, N_points)
-    if add_one:
-        inputs = torch.tensor(np.stack((x, np.ones(N_points))), dtype=torch.float32).T
-    else:
-        inputs = torch.tensor(x, dtype=torch.float32).view((N_points, -1))
-    y = model(inputs).detach().squeeze().numpy()
-    plt.plot(x, y)
-    plt.show()
-
-def gaussian_conv(x, coef=None, scale=1, interval=(-np.pi, np.pi), N_points=1000):
-    res = np.zeros(N_points)
-    z_min, z_max = interval
-    z = np.linspace(z_min, z_max, N_points+1)
-    z = 0.5*(z[1:]+z[:-1])
-    if coef is None:
-        coef = np.ones(len(x)) / len(x)
-    for i in range(len(x)):
-        res += coef[i] * np.exp(- 0.5 * (z_min + (z-x[i]-z_min) % (z_max-z_min))**2 / scale**2)
-    return z, normalize(res, interval=interval)
-
-def circle_to_line(x):
-    return 2 * np.arctan( x[:,1] / (1+x[:,0]))
-
-def Laplacian(f, h=1):
-    return (np.roll(f, 1) + np.roll(f, -1) - 2*f) / h**2
-
-def Grad(f, h=1):
-    return (f - np.roll(f, 1)) / h
-
-def center(f):
-    return f - f.mean()
-
-def normalize(f, interval=(-np.pi,np.pi)):
-    z_min, z_max = interval
-    return len(f) * f / (f.sum() * (z_max-z_min))
+    @torch.no_grad()
+    def __call__(self, model):
+        dico = model.state_dict()
+        w, s = dico['feature_model.weight'], dico['feature_model.sign']
+        w.copy_(self.weight_clipper(w))
+        s.copy_(self.sign_clipper(s))
