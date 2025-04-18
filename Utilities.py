@@ -5,6 +5,7 @@ import ot
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import matplotlib.animation as animation
+from tqdm import tqdm
 
 
 
@@ -145,4 +146,4 @@ def compute_distance(distance, weight_list, weight_ref, c_ref=None, c_list=None,
     iterator = tqdm(idx) if progress else idx
     for i in iterator:
         distance_list.append(distance(weight_ref, c_ref, weight_list[i], c_list[i]).item())
-    return distance_list, idx
+    return idx, distance_list

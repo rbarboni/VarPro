@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from tqdm import tqdm
 import copy
 
 from Utilities import *
@@ -173,30 +172,58 @@ class ExactRidgeProjectionUnbiased():
         model.outer.weight = nn.Parameter(data=u.view((1,-1)), requires_grad=requires_grad)
 
 # least square criterion with projection
-class LeastSquareCriterion(nn.Module):
-    def __init__(self, lmbda, projection=None):
+class VarProCriterion(nn.Module):
+    def __init__(self, lmbda):
         super().__init__()
         self.lmbda = lmbda
-        self.projection = projection
+        self.projection = ExactRidgeProjection(lmbda=lmbda)
         
     def forward(self, inputs, targets, model):
-        if self.projection is not None:
-            self.projection(inputs, targets, model)
+        self.projection(inputs, targets, model)
         predictions = model(inputs)
         return 0.5 * ((predictions - targets)**2).mean() / self.lmbda  + 0.5 * (model.outer.weight**2).mean()
 
 # least square criterion with projection and the unbiasing -1 term  
-class LeastSquareCriterionUnbiased(nn.Module):
-    def __init__(self, lmbda, projection=None):
+class VarProCriterionUnbiased(nn.Module):
+    def __init__(self, lmbda):
         super().__init__()
         self.lmbda = lmbda
-        self.projection = projection
+        self.projection = ExactRidgeProjectionUnbiased(lmbda=lmbda)
         
     def forward(self, inputs, targets, model):
-        if self.projection is not None:
-            self.projection(inputs, targets, model)
+        self.projection(inputs, targets, model)
         predictions = model(inputs)
         return 0.5 * ((predictions - targets)**2).mean() / self.lmbda  + 0.5 * ((model.outer.weight-1)**2).mean()
+    
+# least square criterion with general regularization
+class TwoTimescaleCriterion(nn.Module):
+    def __init__(self, lmbda, regularization_function):
+        super().__init__()
+        self.lmbda = lmbda
+        self.regularization_function = regularization_function
+        
+    def forward(self, inputs, targets, model):
+        predictions = model(inputs)
+        return 0.5 * ((predictions - targets)**2).mean() / self.lmbda + self.regularization_function(model.outer.weight).mean()
+    
+## Regularization functions
+class power_regularization():
+    def __init__(self, p=2):
+        self.p = p
+        
+    def __call__(self, x):
+        return x**self.p / (self.p - 1)
+    
+class power_regularization_unbiased():
+    def __init__(self, p=2):
+        self.p = p
+        
+    def __call__(self, x):
+        return (x-1)**self.p / (self.p - 1)
+
+def  entropy_regularization(x):
+    return x * torch.log(x) - x + 1
+
 
 ## Clipping
 # clipping function for the features 
