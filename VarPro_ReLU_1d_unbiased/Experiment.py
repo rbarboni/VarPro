@@ -90,6 +90,7 @@ student.clipper(student)
 lmbda = args.lmbda
 lr = student_width * args.time_scale
 
+print('Unbiased VarPro criterion')
 criterion = VarProCriterionUnbiased(lmbda=lmbda)
 
 print('Performing 1 projection step before training')
