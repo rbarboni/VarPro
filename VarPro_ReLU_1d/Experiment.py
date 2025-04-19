@@ -54,7 +54,7 @@ teacher = SHL(2, teacher_width, activation, bias=False, clipper=clipper)
 # the teacher distribution approximates a dirac, the parameter gamma constrols the shape of the distribution
 gamma = args.gamma
 
-Theta = np.linspace(-np.pi, np.pi, teacher_width, endpoint=False)
+Theta = 2 * np.pi * np.random.rand(teacher_width) - np.pi
 teacher_init = torch.tensor([[np.cos(theta), np.sin(theta)] for theta in Theta], dtype=torch.float32)
 teacher_init = teacher_init @ torch.tensor([[(1+gamma)**0.5, 0], [0, 1]], dtype=torch.float32)
 teacher_init = teacher_init / torch.norm(teacher_init, 2, dim=-1, keepdim=True).expand_as(teacher_init)
@@ -118,11 +118,33 @@ print(f'Finished! Training took {elapsed_time:.0f} seconds')
 
 ## MMD distance to teacher
 print('Computing MMD distance to teacher')
-distance = DistanceMMD()
-weight_list = [state['feature_model.weight'] for state in problem.state_list]
-weight_ref = teacher.feature_model.weight
-distance_idx, distance_list = compute_distance(distance, weight_list, weight_ref, N_eval=1000, progress=False)
 
+distance_teacher_list = []
+distance_teacher_idx = [int(i) for i in np.linspace(0, len(problem.state_list)-1, 1000)]
+for i in distance_teacher_idx:
+    w1 = problem.state_list[i]['feature_model.weight']
+    w2 = teacher.feature_model.weight
+    distance_teacher_list.append(compute_distance(DistanceMMD(), w1, w2).item())
+
+
+## Exact solution in 1d
+print('Computing MMD distance to exact diffusion')
+
+with gzip.open('diffusion_gamma100_ts-10.pkl.gz', 'rb') as file:
+    f_list = pickle.load(file)
+
+M = f_list.shape[1]
+X = np.linspace(-np.pi, np.pi, M+1)
+X = 0.5 * (X[1:]+X[:-1])
+
+w2 = torch.tensor([[np.cos(x), np.sin(x)] for x in X], dtype=torch.float32)
+
+distance_diffusion_list = []
+distance_diffusion_idx = [int(i) for i in np.linspace(0, args.epochs, 1000)]
+for i in tqdm(distance_diffusion_idx):
+    w1 = problem.state_list[i]['feature_model.weight']
+    c2 = torch.tensor(f_list[i],dtype=torch.float32) * 2*np.pi / M
+    distance_diffusion_list.append(compute_distance(DistanceMMD(), w1, w2, c2=c2).item())
 
 ## Saving Problem
 #print('Saving experiment as: '+path)
@@ -142,8 +164,10 @@ dico = {
     'seed': args.seed,
     'lmbda': lmbda,
     'time_scale': args.time_scale,
-    'distance_teacher_list': distance_list,
-    'distance_teacher_idx': distance_idx,
+    'distance_teacher_list': distance_teacher_list,
+    'distance_teacher_idx': distance_teacher_idx,
+    'distance_diffusion_list': distance_diffusion_list,
+    'distance_diffusion_idx': distance_diffusion_idx,
     'elapsed_time': elapsed_time
 }
 

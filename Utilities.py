@@ -133,17 +133,11 @@ class DistanceOT():
         M = (self.projection(m1[:,None,:] - m2[None,:,:])**2).sum(dim=-1).numpy()
         return np.sqrt(ot.emd2(c1.numpy(), c2.numpy(), M))
 
-def compute_distance(distance, weight_list, weight_ref, c_ref=None, c_list=None, N_eval=100, progress=True):
+def compute_distance(distance, w1, w2, c1=None, c2=None):
     # uniform coefficients
-    if c_ref is None:
-        c_ref = torch.ones(weight_ref.shape[0]) / weight_ref.shape[0]
-    if c_list is None:
-        c = torch.ones(weight_list[0].shape[0]) / weight_list[0].shape[0]
-        c_list = [c for _ in weight_list]
+    if c1 is None:
+        c1 = torch.ones(w1.shape[0]) / w1.shape[0]
+    if c2 is None:
+        c2 = torch.ones(w2.shape[0]) / w2.shape[0]
     
-    distance_list = []
-    idx = np.array([int(i) for i in np.linspace(0, len(weight_list)-1, N_eval+1)])
-    iterator = tqdm(idx) if progress else idx
-    for i in iterator:
-        distance_list.append(distance(weight_ref, c_ref, weight_list[i], c_list[i]).item())
-    return idx, distance_list
+    return distance(w1, c1, w2, c2)
