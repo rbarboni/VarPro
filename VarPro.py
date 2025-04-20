@@ -212,14 +212,14 @@ class power_regularization():
         self.p = p
         
     def __call__(self, x):
-        return x**self.p / (self.p - 1)
+        return x**self.p / self.p
     
 class power_regularization_unbiased():
     def __init__(self, p=2):
         self.p = p
         
     def __call__(self, x):
-        return (x-1)**self.p / (self.p - 1)
+        return (x-1)**self.p / self.p
 
 def  entropy_regularization(x):
     return x * torch.log(x) - x + 1
