@@ -120,7 +120,7 @@ print(f'Finished! Training took {elapsed_time:.0f} seconds')
 print('Computing MMD distance to teacher')
 
 distance_teacher_list = []
-distance_teacher_idx = [int(i) for i in np.linspace(0, len(problem.state_list)-1, 1000)]
+distance_teacher_idx = [int(i) for i in np.linspace(0, args.epochs, 1001)]
 for i in distance_teacher_idx:
     w1 = problem.state_list[i]['feature_model.weight']
     w2 = teacher.feature_model.weight
@@ -140,7 +140,7 @@ X = 0.5 * (X[1:]+X[:-1])
 w2 = torch.tensor([[np.cos(x), np.sin(x)] for x in X], dtype=torch.float32)
 
 distance_diffusion_list = []
-distance_diffusion_idx = [int(i) for i in np.linspace(0, args.epochs, 1000)]
+distance_diffusion_idx = [int(i) for i in np.linspace(0, args.epochs, 1001)]
 for i in distance_diffusion_idx:
     w1 = problem.state_list[i]['feature_model.weight']
     c2 = torch.tensor(f_list[i],dtype=torch.float32) * 2*np.pi / M
