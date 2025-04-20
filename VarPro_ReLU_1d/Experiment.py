@@ -94,10 +94,10 @@ criterion = VarProCriterion(lmbda=lmbda)
 
 print('Performing 1 projection step before training')
 inputs, targets = next(iter(train_loader))
-inputs, targets = inputs.to(device), targets.to(device)
-student.to(device)
+#inputs, targets = inputs.to(device), targets.to(device)
+#student.to(device)
 criterion.projection(inputs, targets, student)
-student.to(torch.device('cpu'))
+#student.to(torch.device('cpu'))
 
 optimizer = torch.optim.SGD([student.feature_model.weight], lr=lr)
 problem = LearningProblem(student, train_loader, optimizer, criterion)
@@ -130,7 +130,7 @@ for i in distance_teacher_idx:
 ## Exact solution in 1d
 print('Computing MMD distance to exact diffusion')
 
-with gzip.open('diffusion_gamma100_ts-10.pkl.gz', 'rb') as file:
+with gzip.open('../diffusion_gamma100_ts-10.pkl.gz', 'rb') as file:
     f_list = pickle.load(file)
 
 M = f_list.shape[1]
@@ -141,7 +141,7 @@ w2 = torch.tensor([[np.cos(x), np.sin(x)] for x in X], dtype=torch.float32)
 
 distance_diffusion_list = []
 distance_diffusion_idx = [int(i) for i in np.linspace(0, args.epochs, 1000)]
-for i in tqdm(distance_diffusion_idx):
+for i in distance_diffusion_idx:
     w1 = problem.state_list[i]['feature_model.weight']
     c2 = torch.tensor(f_list[i],dtype=torch.float32) * 2*np.pi / M
     distance_diffusion_list.append(compute_distance(DistanceMMD(), w1, w2, c2=c2).item())

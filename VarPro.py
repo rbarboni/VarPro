@@ -168,7 +168,7 @@ class ExactRidgeProjectionUnbiased():
         features = model.feature_model(inputs).clone().detach()
         batch_size, width = features.shape[0], features.shape[1]
         K = (features.T @ features) / (batch_size * width)
-        u = torch.linalg.solve(K + self.lmbda * torch.eye(width),  (features.T @ targets) / batch_size + self.lmbda)
+        u = torch.linalg.solve(K + self.lmbda * torch.eye(width).to(K.device),  (features.T @ targets) / batch_size + self.lmbda)
         model.outer.weight = nn.Parameter(data=u.view((1,-1)), requires_grad=requires_grad)
 
 # least square criterion with projection
