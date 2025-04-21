@@ -109,7 +109,6 @@ assert not problem.model.outer.weight.requires_grad
 print('VarPro Traning!')
 
 start = time.perf_counter()
-saving_step = 10
 problem.train(args.epochs, progress=args.progress, saving_step=args.saving_step)
 stop = time.perf_counter()
 elapsed_time = stop - start
@@ -130,7 +129,7 @@ for i in distance_teacher_idx:
 ## Exact solution in 1d
 print('Computing MMD distance to exact diffusion')
 
-with gzip.open('../diffusion_gamma100_ts-10.pkl.gz', 'rb') as file:
+with gzip.open('../diffusion_relu1d_gamma100_ts-10.pkl.gz', 'rb') as file:
     f_list = pickle.load(file)
 
 M = f_list.shape[1]

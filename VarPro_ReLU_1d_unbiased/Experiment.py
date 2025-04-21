@@ -110,7 +110,6 @@ assert not problem.model.outer.weight.requires_grad
 print('VarPro Traning!')
 
 start = time.perf_counter()
-saving_step = 10
 problem.train(args.epochs, progress=args.progress, saving_step=args.saving_step)
 stop = time.perf_counter()
 elapsed_time = stop - start
