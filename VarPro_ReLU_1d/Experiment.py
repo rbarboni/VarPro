@@ -35,8 +35,9 @@ print(f'student_width={args.student_width}, log10(lmbda)={np.log10(args.lmbda):.
 print(f'N={args.N}, gamma={args.gamma}, log2(time_scale)={np.log2(args.time_scale):.1f}, seed={args.seed}')
 
 path = f'width{args.student_width}_lmbda{np.log10(args.lmbda):.1f}_gamma{args.gamma:.1f}_N{args.N}_ts{np.log2(args.time_scale):.1f}_seed{args.seed}.pkl.gz'
+dico_path = 'dico_'+path
 
-if os.path.exists(path):
+if os.path.exists(path) or os.path.exists(dico_path):
     print('Experiments already exists, exiting')
     exit()
 
@@ -170,7 +171,6 @@ dico = {
     'elapsed_time': elapsed_time
 }
 
-dico_path = 'dico_'+path
 print('Saving dictionnary as: '+dico_path)
 with gzip.open(dico_path, 'wb') as file:
     pickle.dump(dico, file)

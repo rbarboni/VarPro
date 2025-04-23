@@ -2,7 +2,7 @@
 
 #SBATCH -A gnf@v100
 #SBATCH --qos=qos_gpu-t3
-#SBATCH --job-name=2TS   # nom du job
+#SBATCH --job-name=2TS_unbiased   # nom du job
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 # Dans le vocabulaire Slurm "multithread" fait référence à l'hyperthreading.

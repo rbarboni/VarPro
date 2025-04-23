@@ -35,8 +35,9 @@ print(f'student_width={args.student_width}, log10(lmbda)={np.log10(args.lmbda):.
 print(f'N={args.N}, gamma={args.gamma}, log2(time_scale)={np.log2(args.time_scale):.1f}, seed={args.seed}')
 
 path = f'width{args.student_width}_lmbda{np.log10(args.lmbda):.1f}_gamma{args.gamma:.1f}_N{args.N}_ts{np.log2(args.time_scale):.1f}_seed{args.seed}.pkl.gz'
+dico_path = 'dico_'+path
 
-if os.path.exists(path):
+if os.path.exists(path) or os.path.exists(dico_path):
     print('Experiments already exists, exiting')
     exit()
 
@@ -89,8 +90,8 @@ student.clipper(student)
 
 lmbda = args.lmbda
 lr = student_width * args.time_scale
-lr_ratio = 35
-lr_outer = lr_ratio * lr
+lr_outer = lmbda * student_width
+lr_ratio = lr_outer / lr
 print(f'learning rate ratio = {lr_ratio:.2f}')
 
 regularization_function = power_regularization(p=2)
@@ -167,7 +168,7 @@ dico = {
     'lmbda': lmbda,
     'time_scale': args.time_scale,
     'lr_outer': lr_outer,
-    'lr_ration': lr_outer / lr,
+    'lr_ratio': lr_ratio,
     'distance_teacher_list': distance_teacher_list,
     'distance_teacher_idx': distance_teacher_idx,
     'distance_diffusion_list': distance_diffusion_list,
@@ -175,7 +176,7 @@ dico = {
     'elapsed_time': elapsed_time
 }
 
-dico_path = 'dico_'+path
+
 print('Saving dictionnary as: '+dico_path)
 with gzip.open(dico_path, 'wb') as file:
     pickle.dump(dico, file)

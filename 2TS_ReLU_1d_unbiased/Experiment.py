@@ -80,7 +80,7 @@ train_loader = torch.utils.data.DataLoader(dataset, batch_size=len(dataset))
 ## Student model
 student_width = args.student_width
 
-student = SHL(2, student_width, activation, bias=False, clipper=clipper, VarProTraining=True)
+student = SHL(2, student_width, activation, bias=False, clipper=clipper, VarProTraining=False)
 
 student_init = torch.randn((student_width, 2), dtype=torch.float32)
 student.feature_model.weight = nn.Parameter(data=student_init, requires_grad=True)
@@ -90,25 +90,27 @@ student.clipper(student)
 
 lmbda = args.lmbda
 lr = student_width * args.time_scale
+lr_outer = lmbda * student_width
+lr_ratio = lr_outer / lr
+print(f'learning rate ratio = {lr_ratio:.2f}')
 
-print('Unbiased VarPro criterion')
-criterion = VarProCriterionUnbiased(lmbda=lmbda)
+regularization_function = power_regularization_unbiased(p=2)
+criterion = TwoTimescaleCriterion(lmbda, regularization_function)
 
 print('Performing 1 projection step before training')
+projection = ExactRidgeProjectionUnbiased(lmbda)
 inputs, targets = next(iter(train_loader))
-#inputs, targets = inputs.to(device), targets.to(device)
-#student.to(device)
-criterion.projection(inputs, targets, student)
-#student.to(torch.device('cpu'))
+projection(inputs, targets, student, requires_grad=True)
 
 optimizer = torch.optim.SGD([student.feature_model.weight], lr=lr)
+optimizer.add_param_group({'lr':lr_outer, 'params': student.outer.weight})
+
 problem = LearningProblem(student, train_loader, optimizer, criterion)
 
 ## Training
-# VarPro training: only the feature model is trained
-assert hasattr(problem.criterion, 'projection')
-assert not problem.model.outer.weight.requires_grad
-print('VarPro Traning!')
+# Two-Timescale training: both inner and outer weight are trained
+assert problem.model.outer.weight.requires_grad
+print('Two-Timescale Training!')
 
 start = time.perf_counter()
 problem.train(args.epochs, progress=args.progress, saving_step=args.saving_step)
@@ -147,7 +149,6 @@ for i in distance_diffusion_idx:
     c2 = torch.tensor(f_list[i],dtype=torch.float32) * 2*np.pi / M
     distance_diffusion_list.append(compute_distance(DistanceMMD(), w1, w2, c2=c2).item())
 
-
 ## Saving Problem
 #print('Saving experiment as: '+path)
 #with gzip.open(path, 'wb') as file:
@@ -166,12 +167,15 @@ dico = {
     'seed': args.seed,
     'lmbda': lmbda,
     'time_scale': args.time_scale,
+    'lr_outer': lr_outer,
+    'lr_ratio': lr_ratio,
     'distance_teacher_list': distance_teacher_list,
     'distance_teacher_idx': distance_teacher_idx,
     'distance_diffusion_list': distance_diffusion_list,
     'distance_diffusion_idx': distance_diffusion_idx,
     'elapsed_time': elapsed_time
 }
+
 
 print('Saving dictionnary as: '+dico_path)
 with gzip.open(dico_path, 'wb') as file:
