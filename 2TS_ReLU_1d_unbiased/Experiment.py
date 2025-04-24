@@ -34,10 +34,12 @@ print('Starting experiment:')
 print(f'student_width={args.student_width}, log10(lmbda)={np.log10(args.lmbda):.1f}, epochs={args.epochs}')
 print(f'N={args.N}, gamma={args.gamma}, log2(time_scale)={np.log2(args.time_scale):.1f}, seed={args.seed}')
 
-path = f'width{args.student_width}_lmbda{np.log10(args.lmbda):.1f}_gamma{args.gamma:.1f}_N{args.N}_ts{np.log2(args.time_scale):.1f}_seed{args.seed}.pkl.gz'
-dico_path = 'dico_'+path
+if args.name is not None:
+    path = args.name + '.pkl.gz'
+else:
+    path = f'width{args.student_width}_lmbda{np.log10(args.lmbda):.1f}_gamma{args.gamma:.1f}_N{args.N}_ts{np.log2(args.time_scale):.1f}_seed{args.seed}.pkl.gz'
 
-if os.path.exists(path) or os.path.exists(dico_path):
+if os.path.exists(path):
     print('Experiments already exists, exiting')
     exit()
 
@@ -136,14 +138,19 @@ print('Computing MMD distance to exact diffusion')
 with gzip.open('../diffusion_relu1d_gamma100_ts-10.pkl.gz', 'rb') as file:
     f_list = pickle.load(file)
 
+T_diffusion = f_list.shape[0] - 1
 M = f_list.shape[1]
 X = np.linspace(-np.pi, np.pi, M+1)
 X = 0.5 * (X[1:]+X[:-1])
 
 w2 = torch.tensor([[np.cos(x), np.sin(x)] for x in X], dtype=torch.float32)
 
+#ts_ratio = args.time_scale / 2**(-8)
+T_max = min(args.epochs, T_diffusion)
+
 distance_diffusion_list = []
-distance_diffusion_idx = [int(i) for i in np.linspace(0, args.epochs, 1001)]
+distance_diffusion_idx = [int(i) for i in np.linspace(0, T_max, min(T_max+1, 1001))]
+
 for i in distance_diffusion_idx:
     w1 = problem.state_list[i]['feature_model.weight']
     c2 = torch.tensor(f_list[i],dtype=torch.float32) * 2*np.pi / M
@@ -177,6 +184,6 @@ dico = {
 }
 
 
-print('Saving dictionnary as: '+dico_path)
-with gzip.open(dico_path, 'wb') as file:
+print('Saving dictionnary as: '+path)
+with gzip.open(path, 'wb') as file:
     pickle.dump(dico, file)
