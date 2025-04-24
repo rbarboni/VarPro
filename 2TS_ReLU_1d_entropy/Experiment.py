@@ -148,7 +148,7 @@ X = 0.5 * (X[1:]+X[:-1])
 
 w2 = torch.tensor([[np.cos(x), np.sin(x)] for x in X], dtype=torch.float32)
 
-ts_ratio = int(args.time_scale / (2**(-10)))
+ts_ratio = args.time_scale / (2**(-10))
 T_max = min(args.epochs, T_diffusion // ts_ratio)
 
 distance_diffusion_list = []
@@ -156,7 +156,7 @@ distance_diffusion_idx = [int(i) for i in np.linspace(0, T_max, min(T_max+1, 100
 
 for i in distance_diffusion_idx:
     w1 = problem.state_list[i]['feature_model.weight']
-    c2 = torch.tensor(f_list[ts_ratio*i],dtype=torch.float32) * 2*np.pi / M
+    c2 = torch.tensor(f_list[int(ts_ratio*i)],dtype=torch.float32) * 2*np.pi / M
     distance_diffusion_list.append(compute_distance(DistanceMMD(), w1, w2, c2=c2).item())
 
 ## Saving Problem
