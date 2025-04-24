@@ -15,12 +15,12 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--student_width', type=int) ## Width of the student model
 parser.add_argument('--epochs', type=int) ## Number of epochs
 parser.add_argument('--lmbda', type=float)  ## Regularization parameter
-parser.add_argument('--time_scale', type=float) ## Time scale of the gradient flow
 
 ## Default arguments
 parser.add_argument('--gamma', type=float, default=100)  ## gamma controls the shape of the target distribution (converges to a dirac at gamma=\infty)
 parser.add_argument('--N', '-N', type=int, default=4096) ## Number of data samples
 parser.add_argument('--teacher_width', type=int, default=4096) ## Width of the teacher model
+parser.add_argument('--time_scale', type=float, default=2**(-10)) ## Time scale of the gradient flow
 parser.add_argument('--seed', type=int, default=0)  ## Random seed
 parser.add_argument('--progress', type=bool, default=False) ## Print progress during training
 parser.add_argument('--saving_step', type=int, default=1) ## Save the model every saving_step epochs
@@ -34,10 +34,13 @@ print('Starting experiment:')
 print(f'student_width={args.student_width}, log10(lmbda)={np.log10(args.lmbda):.1f}, epochs={args.epochs}')
 print(f'N={args.N}, gamma={args.gamma}, log2(time_scale)={np.log2(args.time_scale):.1f}, seed={args.seed}')
 
-path = f'width{args.student_width}_lmbda{np.log10(args.lmbda):.1f}_gamma{args.gamma:.1f}_N{args.N}_ts{np.log2(args.time_scale):.1f}_seed{args.seed}.pkl.gz'
-dico_path = 'dico_'+path
 
-if os.path.exists(path) or os.path.exists(dico_path):
+if args.name is not None:
+    path = args.name + '.pkl.gz'
+else:
+    path = f'width{args.student_width}_lmbda{np.log10(args.lmbda):.1f}_gamma{args.gamma:.1f}_N{args.N}_ts{np.log2(args.time_scale):.1f}_seed{args.seed}.pkl.gz'
+
+if os.path.exists(path):
     print('Experiments already exists, exiting')
     exit()
 
@@ -130,7 +133,7 @@ for i in distance_teacher_idx:
 ## Exact solution in 1d
 print('Computing MMD distance to exact diffusion')
 
-with gzip.open('../diffusion_entropy_relu1d_gamma100_ts-10.pkl.gz', 'rb') as file:
+with gzip.open('../diffusion_relu1d_gamma100_ts-10.pkl.gz', 'rb') as file:
     f_list = pickle.load(file)
 
 T_diffusion = f_list.shape[0] - 1
@@ -140,15 +143,15 @@ X = 0.5 * (X[1:]+X[:-1])
 
 w2 = torch.tensor([[np.cos(x), np.sin(x)] for x in X], dtype=torch.float32)
 
-ts_ratio = args.time_scale / 2**(-8)
-T_max = min(args.epochs, T_diffusion // ts_ratio)
+#ts_ratio = args.time_scale / 2**(-8)
+T_max = min(args.epochs, T_diffusion)
 
 distance_diffusion_list = []
 distance_diffusion_idx = [int(i) for i in np.linspace(0, T_max, min(T_max+1, 1001))]
 
 for i in distance_diffusion_idx:
     w1 = problem.state_list[i]['feature_model.weight']
-    c2 = torch.tensor(f_list[int(ts_ratio*i)],dtype=torch.float32) * 2*np.pi / M
+    c2 = torch.tensor(f_list[i],dtype=torch.float32) * 2*np.pi / M
     distance_diffusion_list.append(compute_distance(DistanceMMD(), w1, w2, c2=c2).item())
 
 
@@ -177,6 +180,6 @@ dico = {
     'elapsed_time': elapsed_time
 }
 
-print('Saving dictionnary as: '+dico_path)
-with gzip.open(dico_path, 'wb') as file:
+print('Saving dictionnary as: '+path)
+with gzip.open(path, 'wb') as file:
     pickle.dump(dico, file)
