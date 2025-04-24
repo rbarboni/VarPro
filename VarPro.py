@@ -117,14 +117,13 @@ class SignedSHLFeatureModel(nn.Module):
     
 # feature model for a convolution
 class ConvolutionFeatureModel(nn.Module):
-    def __init__(self, input_dim, width, activation, scale):
+    def __init__(self, input_dim, width, activation):
         super().__init__()
         self.weight = nn.Parameter(data=torch.randn(width, input_dim), requires_grad=True)
         self.activation = activation
-        self.scale = scale
 
     def forward(self, x):
-        return self.activation(torch.linalg.vector_norm(self.weight.T[None,:,:] - x[:,:,None], dim=1) / self.scale)
+        return self.activation(torch.linalg.vector_norm(self.weight.T[None,:,:] - x[:,:,None], dim=1))
 
 ## Models constructors
 def SHL(input_dim, width, activation, bias=False, VarProTraining=True, clipper=None):
@@ -135,8 +134,8 @@ def SignedSHL(input_dim, width, activation, bias=False, VarProTraining=True, cli
     feature_model = SignedSHLFeatureModel(input_dim, width, activation, bias=bias)
     return VarProModel(feature_model, width, 1, VarProTraining=VarProTraining, clipper=clipper)
 
-def Convolution(input_dim, width, activation, scale, VarProTraining=True, clipper=None):
-    feature_model = ConvolutionFeatureModel(input_dim, width, activation, scale)
+def Convolution(input_dim, width, activation, VarProTraining=True, clipper=None):
+    feature_model = ConvolutionFeatureModel(input_dim, width, activation)
     return VarProModel(feature_model, width, 1, VarProTraining=VarProTraining, clipper=clipper)
 
 
