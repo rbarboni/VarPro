@@ -26,12 +26,11 @@ class CustomDataset(torch.utils.data.Dataset):
         return self.inputs[idx], self.labels[idx]
 
 ## Training routines
-def training_loop(model, train_loader, optimizer, criterion, progress=False):
+def training_loop(model, train_loader, optimizer, criterion):
     loss_list = []
     model.to(device)
     model.train()
-    iterator = tqdm(train_loader) if progress else train_loader
-    for inputs, targets in iterator:
+    for inputs, targets in train_loader:
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
         loss = criterion(inputs, targets, model)
@@ -40,8 +39,6 @@ def training_loop(model, train_loader, optimizer, criterion, progress=False):
         loss_list.append(loss.item())
         if hasattr(model, 'clipper'):
             model.clipper(model)
-        if progress:
-            iterator.set_description(f'log10(loss) = {np.log10(loss_list[-1]):.2f}')
     model.to(torch.device('cpu')) 
     return loss_list
 
@@ -55,12 +52,10 @@ class LearningProblem():
         self.loss_list = []
         self.state_list = [copy.deepcopy(self.model.state_dict())]
 
-    def train(self, epochs, progress=True, saving_step=1, subprogress=False):
-        if subprogress:
-            progress = False
+    def train(self, epochs, progress=True, saving_step=1):
         iterator = tqdm(range(epochs)) if progress else range(epochs)
         for i in iterator:
-            loss = training_loop(self.model, self.train_loader, self.optimizer, self.criterion, progress=subprogress)
+            loss = training_loop(self.model, self.train_loader, self.optimizer, self.criterion)
             self.loss_list.extend(loss)
             if (i+1) % saving_step == 0:
                 self.state_list.append(copy.deepcopy(self.model.state_dict()))
@@ -156,6 +151,22 @@ class ExactRidgeProjection():
         batch_size, width = features.shape[0], features.shape[1]
         if batch_size > width: ## underparameterized case
             K = (features.T @ features) / (batch_size * width)
+            u = torch.linalg.solve(K + self.lmbda * torch.eye(width).to(K.device),  (features.T @ targets) / batch_size)
+        else: ## overparameterized case
+            K = (features @ features.T) / (batch_size*width)
+            u = features.T @ torch.linalg.solve(K + self.lmbda * torch.eye(batch_size).to(K.device), targets) / batch_size
+        model.outer.weight = nn.Parameter(data=u.view((1,-1)), requires_grad=requires_grad)
+
+class ExactRidgeProjectionRight():
+    def __init__(self, lmbda):
+        self.lmbda = lmbda
+
+    @torch.no_grad()
+    def __call__(self, inputs, targets, model, requires_grad=False):
+        features = model.feature_model(inputs).clone().detach()
+        batch_size, width = features.shape[0], features.shape[1]
+        if batch_size > width: ## underparameterized case
+            K = (features.T @ features) / (batch_size * width)
             u = torch.linalg.solve(K + self.lmbda * torch.eye(width).to(K.device),  targets.T @ features / batch_size, left=False)
         else: ## overparameterized case
             K = (features @ features.T) / (batch_size*width)
@@ -172,20 +183,28 @@ class ExactRidgeProjectionUnbiased():
         features = model.feature_model(inputs).clone().detach()
         batch_size, width = features.shape[0], features.shape[1]
         K = (features.T @ features) / (batch_size * width)
-        u = torch.linalg.solve(K + self.lmbda * torch.eye(width).to(K.device),  (targets.T @ features) / batch_size + self.lmbda, left=False)
-        model.outer.weight = nn.Parameter(data=u, requires_grad=requires_grad)
+        u = torch.linalg.solve(K + self.lmbda * torch.eye(width).to(K.device),  (features.T @ targets) / batch_size + self.lmbda)
+        model.outer.weight = nn.Parameter(data=u.view((1,-1)), requires_grad=requires_grad)
 
 # least square criterion with projection
 class VarProCriterion(nn.Module):
-    def __init__(self, lmbda, num_classes=None):
+    def __init__(self, lmbda):
         super().__init__()
         self.lmbda = lmbda
         self.projection = ExactRidgeProjection(lmbda=lmbda)
-        self.num_classes = num_classes
         
     def forward(self, inputs, targets, model):
-        if self.num_classes is not None:
-            targets = nn.functional.one_hot(targets, num_classes=self.num_classes).to(torch.float32)
+        self.projection(inputs, targets, model)
+        predictions = model(inputs)
+        return 0.5 * ((predictions - targets)**2).mean() / self.lmbda  + 0.5 * (model.outer.weight**2).mean()
+    
+class VarProCriterionRight(nn.Module):
+    def __init__(self, lmbda):
+        super().__init__()
+        self.lmbda = lmbda
+        self.projection = ExactRidgeProjectionRight(lmbda=lmbda)
+        
+    def forward(self, inputs, targets, model):
         self.projection(inputs, targets, model)
         predictions = model(inputs)
         return 0.5 * ((predictions - targets)**2).mean() / self.lmbda  + 0.5 * (model.outer.weight**2).mean()
