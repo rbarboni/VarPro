@@ -1,0 +1,7 @@
+# Liste des fichiers à ignorer dans git
+*.pkl.gz
+*.slurm
+*.pyc
+.ipynb_checkpoints/*
+*.DS_Store
+syncignore.txt

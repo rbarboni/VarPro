@@ -45,15 +45,34 @@ def training_loop(model, train_loader, optimizer, criterion, progress=False):
     model.to(torch.device('cpu')) 
     return loss_list
 
+def evaluation_loop(model, loader, criterion):
+    loss_list = []
+    model.to(device)
+    model.eval()
+    with torch.no_grad():
+        for inputs, targets in loader:
+            inputs, targets = inputs.to(device), targets.to(device)
+            loss = criterion(inputs, targets, model)
+            loss_list.append(loss.item())
+    model.to(torch.device('cpu'))
+    return np.mean(loss_list).item() #takes the mean of the evaluation loss over the batch size
+
 class LearningProblem():
-    def __init__(self, model, train_loader, optimizer, criterion):
+    def __init__(self, model, train_loader, optimizer, criterion, test_loader=None, test_criterion=None):
         super().__init__()
         self.model = model
+        self.state_list = [copy.deepcopy(self.model.state_dict())]
+
+        # attributes for training
         self.train_loader = train_loader
         self.optimizer = optimizer
         self.criterion = criterion
         self.loss_list = []
-        self.state_list = [copy.deepcopy(self.model.state_dict())]
+        
+        # attributes for evaluation
+        self.test_loader = test_loader
+        self.test_criterion = test_criterion
+        self.test_loss_list = []
 
     def train(self, epochs, progress=True, saving_step=1, subprogress=False):
         if subprogress:
@@ -68,6 +87,21 @@ class LearningProblem():
                 iterator.set_description(f'log10(loss) = {np.log10(self.loss_list[-1]):.2f}')
             elif (i+1) % (epochs // 100) == 0:
                 print(f'{100 * (i+1) / epochs:.0f}% elapsed, log10(loss)={np.log10(self.loss_list[-1]):.2f}')
+
+    def train_and_eval(self, epochs, saving_step=1, subprogress=False):
+        assert hasattr(self, 'test_loader')
+        test_loss = evaluation_loop(self.model, self.test_loader, self.test_criterion)
+        self.test_loss_list.append(test_loss)
+        print(f'0 epochs elapsed, evaluation loss={self.loss_list[-1]:.3f}')
+        for i in range(epochs):
+            loss = training_loop(self.model, self.train_loader, self.optimizer, self.criterion, progress=subprogress)
+            self.loss_list.extend(loss)
+            test_loss = evaluation_loop(self.model, self.test_loader, self.test_criterion)
+            self.test_loss_list.extend(test_loss)
+            print(f'{i} epochs elapsed, evaluation loss={self.loss_list[-1]:.23f}')
+            if (i+1) % saving_step == 0:
+                self.state_list.append(copy.deepcopy(self.model.state_dict()))
+                
 
 ## Models
 class ActivationFunction(nn.Module):
@@ -201,6 +235,22 @@ class VarProCriterionUnbiased(nn.Module):
         self.projection(inputs, targets, model)
         predictions = model(inputs)
         return 0.5 * ((predictions - targets)**2).mean() / self.lmbda  + 0.5 * ((model.outer.weight-1)**2).mean()
+    
+
+# Classification loss with projection
+class VarProClassifEvalutation(nn.Module):
+    def __init__(self, lmbda, num_classes, criterion=nn.CrossEntropyLoss()):
+        super().__init__()
+        self.lmbda = lmbda
+        self.projection = ExactRidgeProjection(lmbda=lmbda)
+        self.num_classes = num_classes
+        self.criterion = criterion
+        
+    def forward(self, inputs, targets, model):
+        hot_one_targets = nn.functional.one_hot(targets, num_classes=self.num_classes).to(torch.float32)
+        self.projection(inputs, hot_one_targets, model, requires_grad=False)
+        predictions = model(inputs)
+        return self.criterion(predictions, targets)
     
 # least square criterion with general regularization
 class TwoTimescaleCriterion(nn.Module):
