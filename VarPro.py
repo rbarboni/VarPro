@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torchmetrics
 import numpy as np
 import copy
 
@@ -26,10 +27,14 @@ class CustomDataset(torch.utils.data.Dataset):
         return self.inputs[idx], self.labels[idx]
 
 ## Training routines
-def training_loop(model, train_loader, optimizer, criterion, progress=False):
+def training_loop(model, train_loader, optimizer, criterion, progress=False, averaging=False):
     loss_list = []
     model.to(device)
     model.train()
+
+    if averaging:
+        outer_weight_average = torch.zeros_like(model.outer.weight)
+
     iterator = tqdm(train_loader) if progress else train_loader
     for inputs, targets in iterator:
         inputs, targets = inputs.to(device), targets.to(device)
@@ -42,7 +47,13 @@ def training_loop(model, train_loader, optimizer, criterion, progress=False):
             model.clipper(model)
         if progress:
             iterator.set_description(f'log10(loss) = {np.log10(loss_list[-1]):.2f}')
-    model.to(torch.device('cpu')) 
+        if averaging:
+            outer_weight_average += model.outer.weight.clone().detach() / len(train_loader)
+    
+    if averaging:
+        model.outer.weight = nn.Parameter(data=outer_weight_average, requires_grad=False)
+    
+    model.to(torch.device('cpu'))
     return loss_list
 
 def evaluation_loop(model, loader, criterion):
@@ -88,17 +99,23 @@ class LearningProblem():
             elif (i+1) % (epochs // 100) == 0:
                 print(f'{100 * (i+1) / epochs:.0f}% elapsed, log10(loss)={np.log10(self.loss_list[-1]):.2f}')
 
-    def train_and_eval(self, epochs, saving_step=1, subprogress=False):
+    def train_and_eval(self, epochs, saving_step=1, subprogress=False, averaging=False):
         assert hasattr(self, 'test_loader')
         test_loss = evaluation_loop(self.model, self.test_loader, self.test_criterion)
         self.test_loss_list.append(test_loss)
-        print(f'0 epochs elapsed, evaluation loss={self.loss_list[-1]:.3f}')
+        print(f'0 epochs elapsed, evaluation loss={self.test_loss_list[-1]:.3f}')
+
         for i in range(epochs):
-            loss = training_loop(self.model, self.train_loader, self.optimizer, self.criterion, progress=subprogress)
+            loss = training_loop(self.model,
+                                 self.train_loader,
+                                 self.optimizer,
+                                 self.criterion,
+                                 progress=subprogress,
+                                 averaging=averaging)
             self.loss_list.extend(loss)
             test_loss = evaluation_loop(self.model, self.test_loader, self.test_criterion)
-            self.test_loss_list.extend(test_loss)
-            print(f'{i} epochs elapsed, evaluation loss={self.loss_list[-1]:.23f}')
+            self.test_loss_list.append(test_loss)
+            print(f'{i+1} epochs elapsed, evaluation loss={self.test_loss_list[-1]:.3f}')
             if (i+1) % saving_step == 0:
                 self.state_list.append(copy.deepcopy(self.model.state_dict()))
                 
@@ -219,7 +236,7 @@ class VarProCriterion(nn.Module):
         
     def forward(self, inputs, targets, model):
         if self.num_classes is not None:
-            targets = nn.functional.one_hot(targets, num_classes=self.num_classes).to(torch.float32)
+            targets = nn.functional.one_hot(targets, num_classes=self.num_classes).to(device=inputs.device, dtype=inputs.dtype)
         self.projection(inputs, targets, model)
         predictions = model(inputs)
         return 0.5 * ((predictions - targets)**2).mean() / self.lmbda  + 0.5 * (model.outer.weight**2).mean()
@@ -239,17 +256,21 @@ class VarProCriterionUnbiased(nn.Module):
 
 # Classification loss with projection
 class VarProClassifEvalutation(nn.Module):
-    def __init__(self, lmbda, num_classes, criterion=nn.CrossEntropyLoss()):
+    def __init__(self, lmbda, num_classes, criterion=None):
         super().__init__()
         self.lmbda = lmbda
         self.projection = ExactRidgeProjection(lmbda=lmbda)
         self.num_classes = num_classes
-        self.criterion = criterion
+        if criterion is None:
+            print('Test criterion is None: Using top-1 accuracy as default')
+            self.criterion = torchmetrics.Accuracy(task='multiclass', num_classes=num_classes, top_k=1).to(device)
+        else:
+            self.criterion = criterion.to(device)
         
     def forward(self, inputs, targets, model):
-        hot_one_targets = nn.functional.one_hot(targets, num_classes=self.num_classes).to(torch.float32)
-        self.projection(inputs, hot_one_targets, model, requires_grad=False)
-        predictions = model(inputs)
+        #hot_one_targets = nn.functional.one_hot(targets, num_classes=self.num_classes).to(device=inputs.device, dtype=inputs.dtype)
+        #self.projection(inputs, hot_one_targets, model, requires_grad=False) # projection of the outer layer
+        predictions = torch.softmax(model(inputs), dim=-1) # transforms to logits
         return self.criterion(predictions, targets)
     
 # least square criterion with general regularization

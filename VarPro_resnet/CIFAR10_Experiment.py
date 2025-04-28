@@ -39,7 +39,7 @@ print(f'batch_size={args.batch_size}, log2(time_scale)={np.log2(args.time_scale)
 if args.name is not None:
     path = args.name + '.pkl.gz'
 else:
-    path = f'MNIST_lmbda{np.log10(args.lmbda):.1f}_bs{args.batch_size}_ts{np.log2(args.time_scale):.1f}_seed{args.seed}.pkl.gz'
+    path = f'CIFAR10_lmbda{np.log10(args.lmbda):.1f}_bs{args.batch_size}_ts{np.log2(args.time_scale):.1f}_seed{args.seed}.pkl.gz'
 
 if os.path.exists(path):
     print('Experiments already exists, exiting')
@@ -48,24 +48,36 @@ if os.path.exists(path):
 torch.manual_seed(args.seed)
 
 
-## Dataset
-transform_train = transforms.Compose([transforms.ToImage(), transforms.ToDtype(torch.float32)])
+# Data
+print('==> Preparing data..')
+transform_train = transforms.Compose([
+    transforms.RandomCrop(32, padding=4),
+    transforms.RandomHorizontalFlip(),
+    transforms.ToTensor(),
+    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+])
 
-trainset = torchvision.datasets.MNIST(root='./mnist_data',
-                                    train=True,
-                                    download=True,
-                                    transform=transform_train)
+transform_test = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+])
 
-train_loader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=1)
+trainset = torchvision.datasets.CIFAR10(root='./cifar10_data',
+                                        train=True,
+                                        download=True,
+                                        transform=transform_train)
 
-testset = torchvision.datasets.MNIST(root='./mnist_data',
-                                    train=False,
-                                    download=True,
-                                    transform=transform_train)
-test_loader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=1)
+train_loader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=2)
+
+testset = torchvision.datasets.CIFAR10(root='./cifar10_data',
+                                       train=False,
+                                       download=True,
+                                       transform=transform_test)
+
+test_loader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=2)
 
 ## Student model
-resnet = ResNet18(in_channels=1, VarProTraining=True)
+resnet = ResNet18(in_channels=3, VarProTraining=True)
 
 ## Learning problem
 
@@ -85,7 +97,13 @@ test_criterion = VarProClassifEvalutation(lmbda=lmbda, num_classes=10, criterion
 #student.to(torch.device('cpu'))
 
 optimizer = torch.optim.SGD(resnet.feature_model.parameters(), lr=lr)
-problem = LearningProblem(resnet, train_loader, optimizer, criterion, test_criterion=test_criterion, test_loader=test_loader)
+
+problem = LearningProblem(resnet,
+                          train_loader,
+                          optimizer,
+                          criterion,
+                          test_criterion=test_criterion,
+                          test_loader=test_loader)
 
 ## Training
 # VarPro training: only the feature model is trained
@@ -94,7 +112,10 @@ assert not problem.model.outer.weight.requires_grad
 print('VarPro Training!')
 
 start = time.perf_counter()
-problem.train_and_eval(args.epochs, saving_step=args.saving_step, subprogress=args.progress)
+problem.train_and_eval(args.epochs,
+                       saving_step=args.saving_step,
+                       subprogress=args.progress,
+                       averaging=True)
 stop = time.perf_counter()
 elapsed_time = stop - start
 print(f'Finished! Training took {elapsed_time:.0f} seconds')

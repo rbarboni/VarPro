@@ -5,3 +5,5 @@
 .ipynb_checkpoints/*
 *.DS_Store
 syncignore.txt
+VarPro_resnet/cifar10_data/*
+VarPro_resnet/mnist_data/*
