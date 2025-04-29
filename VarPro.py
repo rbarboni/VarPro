@@ -259,22 +259,18 @@ class VarProCriterionUnbiased(nn.Module):
     
 
 # Classification loss with projection
-class VarProClassifEvalutation(nn.Module):
-    def __init__(self, lmbda, num_classes, criterion=None):
+class ClassifAccuracy(nn.Module):
+    def __init__(self, num_classes, top_k=None):
         super().__init__()
-        self.lmbda = lmbda
-        self.projection = ExactRidgeProjection(lmbda=lmbda)
         self.num_classes = num_classes
-        if criterion is None:
-            print('Test criterion is None: Using top-1 accuracy as default')
+        if top_k is None:
+            print('top_k is None: Using top-1 accuracy as default')
             self.criterion = torchmetrics.Accuracy(task='multiclass', num_classes=num_classes, top_k=1).to(device)
         else:
-            self.criterion = criterion.to(device)
+            self.criterion = torchmetrics.Accuracy(task='multiclass', num_classes=num_classes, top_k=top_k).to(device)
         
     def forward(self, inputs, targets, model):
-        #hot_one_targets = nn.functional.one_hot(targets, num_classes=self.num_classes).to(device=inputs.device, dtype=inputs.dtype)
-        #self.projection(inputs, hot_one_targets, model, requires_grad=False) # projection of the outer layer
-        predictions = torch.softmax(model(inputs), dim=-1) # transforms to logits
+        predictions = model(inputs) # MulticlasAccuracy will automatically apply argmax
         return self.criterion(predictions, targets)
     
 # least square criterion with general regularization

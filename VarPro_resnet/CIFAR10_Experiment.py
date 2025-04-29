@@ -16,14 +16,14 @@ import os
 parser = argparse.ArgumentParser()
 
 ## Mandatory arguments
-parser.add_argument('--epochs', type=int) ## Number of epochs
-parser.add_argument('--lmbda', type=float)  ## Regularization parameter
+parser.add_argument('--epochs', '-e', type=int) ## Number of epochs
+parser.add_argument('--lmbda', '-l', type=float)  ## Regularization parameter
 
 ## Default arguments
 parser.add_argument('--batch_size', '-bs', type=int, default=128) ## Number of data samples
 parser.add_argument('--time_scale', '-ts', type=float, default=1e-4) ## Time scale of the gradient flow
-parser.add_argument('--seed', type=int, default=0)  ## Random seed
-parser.add_argument('--progress', type=bool, default=False) ## Print progress during training
+parser.add_argument('--seed', '-s', type=int, default=0)  ## Random seed
+parser.add_argument('--progress', '-p', type=bool, default=False) ## Print progress during training
 
 parser.add_argument('--name', type=str, default=None) ## Name of the file to save the experiment
 
@@ -52,12 +52,14 @@ print('==> Preparing data..')
 transform_train = transforms.Compose([
     transforms.RandomCrop(32, padding=4),
     transforms.RandomHorizontalFlip(),
-    transforms.ToTensor(),
+    transforms.ToImage(),
+    transforms.ToDtype(torch.float32, scale=True),
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
 
 transform_test = transforms.Compose([
-    transforms.ToTensor(),
+    transforms.ToImage(),
+    transforms.ToDtype(torch.float32, scale=True),
     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
 ])
 
@@ -73,7 +75,7 @@ testset = torchvision.datasets.CIFAR10(root='./cifar10_data',
                                        download=True,
                                        transform=transform_test)
 
-test_loader = torch.utils.data.DataLoader(testset, batch_size=args.batch_size, shuffle=False, num_workers=2)
+test_loader = torch.utils.data.DataLoader(testset, batch_size=1000, shuffle=False, num_workers=2)
 
 ## Student model
 resnet = ResNet18(in_channels=3, VarProTraining=True)
@@ -85,8 +87,7 @@ lr = 512 * args.time_scale
 
 criterion = VarProCriterion(lmbda=lmbda, num_classes=10)
 
-accuracy = torchmetrics.Accuracy(task='multiclass', num_classes=10, top_k=1)
-test_criterion = VarProClassifEvalutation(lmbda=lmbda, num_classes=10, criterion=accuracy)
+test_criterion = ClassifAccuracy(num_classes=10) # top_1 accuracy by default
 
 optimizer = torch.optim.SGD(resnet.feature_model.parameters(), lr=lr)
 
@@ -128,6 +129,7 @@ print(f'Finished! Training took {elapsed_time:.0f} seconds')
 dico = {
     'model_state_list': problem.state_list,
     'loss_list': problem.loss_list,
+    'accuracy_list': problem.test_loss_list,
     'epochs': args.epochs,
     'bacth_size': args.batch_size,
     'seed': args.seed,
