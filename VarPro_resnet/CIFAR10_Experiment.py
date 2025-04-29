@@ -21,10 +21,9 @@ parser.add_argument('--lmbda', type=float)  ## Regularization parameter
 
 ## Default arguments
 parser.add_argument('--batch_size', '-bs', type=int, default=128) ## Number of data samples
-parser.add_argument('--time_scale', '-ts', type=float, default=2**(-10)) ## Time scale of the gradient flow
+parser.add_argument('--time_scale', '-ts', type=float, default=1e-4) ## Time scale of the gradient flow
 parser.add_argument('--seed', type=int, default=0)  ## Random seed
 parser.add_argument('--progress', type=bool, default=False) ## Print progress during training
-parser.add_argument('--saving_step', type=int, default=1) ## Save the model every saving_step epochs
 
 parser.add_argument('--name', type=str, default=None) ## Name of the file to save the experiment
 
@@ -32,14 +31,14 @@ parser.add_argument('--name', type=str, default=None) ## Name of the file to sav
 args, unknown = parser.parse_known_args()
 
 print('Starting experiment:')
-print(f'log10(lmbda)={np.log10(args.lmbda):.1f}, epochs={args.epochs}')
-print(f'batch_size={args.batch_size}, log2(time_scale)={np.log2(args.time_scale):.1f}, seed={args.seed}')
+print(f'log10(lmbda)={np.log10(args.lmbda):.1f}, epochs={args.epochs}+3')
+print(f'batch_size={args.batch_size}, log10(time_scale)={np.log10(args.time_scale):.1f}, seed={args.seed}')
 
 
 if args.name is not None:
     path = args.name + '.pkl.gz'
 else:
-    path = f'CIFAR10_lmbda{np.log10(args.lmbda):.1f}_bs{args.batch_size}_ts{np.log2(args.time_scale):.1f}_seed{args.seed}.pkl.gz'
+    path = f'CIFAR10_lmbda{np.log10(args.lmbda):.1f}_bs{args.batch_size}_ts{np.log10(args.time_scale):.1f}_seed{args.seed}.pkl.gz'
 
 if os.path.exists(path):
     print('Experiments already exists, exiting')
@@ -89,13 +88,6 @@ criterion = VarProCriterion(lmbda=lmbda, num_classes=10)
 accuracy = torchmetrics.Accuracy(task='multiclass', num_classes=10, top_k=1)
 test_criterion = VarProClassifEvalutation(lmbda=lmbda, num_classes=10, criterion=accuracy)
 
-#print('Performing 1 projection step before training')
-#inputs, targets = next(iter(train_loader))
-#inputs, targets = inputs.to(device), targets.to(device)
-#student.to(device)
-#criterion.projection(inputs, targets, resnet)
-#student.to(torch.device('cpu'))
-
 optimizer = torch.optim.SGD(resnet.feature_model.parameters(), lr=lr)
 
 problem = LearningProblem(resnet,
@@ -112,19 +104,25 @@ assert not problem.model.outer.weight.requires_grad
 print('VarPro Training!')
 
 start = time.perf_counter()
+
 problem.train_and_eval(args.epochs,
-                       saving_step=args.saving_step,
+                       saving_step=1,
                        subprogress=args.progress,
                        averaging=True)
+
+print('Changing learning rate for the last 3 epochs: lr=0.1*lr')
+
+for param_group in problem.optimizer.param_groups:
+    param_group['lr'] = 0.1 * lr
+
+problem.train_and_eval(3,
+                       saving_step=1,
+                       subprogress=args.progress,
+                       averaging=True)
+
 stop = time.perf_counter()
 elapsed_time = stop - start
 print(f'Finished! Training took {elapsed_time:.0f} seconds')
-
-
-## Saving Problem
-#print('Saving experiment as: '+path)
-#with gzip.open(path, 'wb') as file:
-#    pickle.dump(problem, file)
 
 ## Saving dictionnary
 dico = {

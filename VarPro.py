@@ -81,16 +81,24 @@ class LearningProblem():
         self.loss_list = []
         
         # attributes for evaluation
-        self.test_loader = test_loader
-        self.test_criterion = test_criterion
-        self.test_loss_list = []
+        if test_loader is not None and test_criterion is not None:
+            self.test_loader = test_loader
+            self.test_criterion = test_criterion
+            test_loss = evaluation_loop(self.model, self.test_loader, self.test_criterion)
+            self.test_loss_list = [test_loss]
+            print(f'0 epochs elapsed, evaluation loss={self.test_loss_list[-1]:.3f}')
 
     def train(self, epochs, progress=True, saving_step=1, subprogress=False):
         if subprogress:
             progress = False
         iterator = tqdm(range(epochs)) if progress else range(epochs)
         for i in iterator:
-            loss = training_loop(self.model, self.train_loader, self.optimizer, self.criterion, progress=subprogress)
+            loss = training_loop(self.model,
+                                 self.train_loader,
+                                 self.optimizer,
+                                 self.criterion,
+                                 progress=subprogress)
+            
             self.loss_list.extend(loss)
             if (i+1) % saving_step == 0:
                 self.state_list.append(copy.deepcopy(self.model.state_dict()))
@@ -100,11 +108,7 @@ class LearningProblem():
                 print(f'{100 * (i+1) / epochs:.0f}% elapsed, log10(loss)={np.log10(self.loss_list[-1]):.2f}')
 
     def train_and_eval(self, epochs, saving_step=1, subprogress=False, averaging=False):
-        assert hasattr(self, 'test_loader')
-        test_loss = evaluation_loop(self.model, self.test_loader, self.test_criterion)
-        self.test_loss_list.append(test_loss)
-        print(f'0 epochs elapsed, evaluation loss={self.test_loss_list[-1]:.3f}')
-
+        assert hasattr(self, 'test_loader') and hasattr(self, 'test_criterion')
         for i in range(epochs):
             loss = training_loop(self.model,
                                  self.train_loader,
