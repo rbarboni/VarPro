@@ -103,6 +103,10 @@ class ResNetFeatureModel(nn.Module):
         out = out.view(out.size(0), -1)
         #out = self.linear(out)
         return out
+    
+def ResNet9(num_classes=10, in_channels=3, VarProTraining=True):
+    feature_model = ResNetFeatureModel(BasicBlock, [1, 1, 1, 1], in_channels=in_channels)
+    return VarProModel(feature_model, 512, num_classes, VarProTraining=VarProTraining)
 
 
 def ResNet18(num_classes=10, in_channels=3, VarProTraining=True):

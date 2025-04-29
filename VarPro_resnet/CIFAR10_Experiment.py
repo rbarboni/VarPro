@@ -24,6 +24,7 @@ parser.add_argument('--batch_size', '-bs', type=int, default=128) ## Number of d
 parser.add_argument('--time_scale', '-ts', type=float, default=1e-4) ## Time scale of the gradient flow
 parser.add_argument('--seed', '-s', type=int, default=0)  ## Random seed
 parser.add_argument('--progress', '-p', type=bool, default=False) ## Print progress during training
+parser.add_argument('--model', '-m', type=str, default='ResNet18') ## Model to use
 
 parser.add_argument('--name', type=str, default=None) ## Name of the file to save the experiment
 
@@ -38,7 +39,7 @@ print(f'batch_size={args.batch_size}, log10(time_scale)={np.log10(args.time_scal
 if args.name is not None:
     path = args.name + '.pkl.gz'
 else:
-    path = f'CIFAR10_lmbda{np.log10(args.lmbda):.1f}_bs{args.batch_size}_ts{np.log10(args.time_scale):.1f}_seed{args.seed}.pkl.gz'
+    path = 'CIFAR10_'+args.model+f'_lmbda{np.log10(args.lmbda):.1f}_bs{args.batch_size}_ts{np.log10(args.time_scale):.1f}_seed{args.seed}.pkl.gz'
 
 if os.path.exists(path):
     print('Experiments already exists, exiting')
@@ -78,7 +79,10 @@ testset = torchvision.datasets.CIFAR10(root='./cifar10_data',
 test_loader = torch.utils.data.DataLoader(testset, batch_size=1000, shuffle=False, num_workers=2)
 
 ## Student model
-resnet = ResNet18(in_channels=3, VarProTraining=True)
+model_dict = {'ResNet9': ResNet9,
+              'ResNet18': ResNet18}
+
+resnet = model_dict[args.model](in_channels=3, num_classes=10, VarProTraining=True)
 
 ## Learning problem
 
