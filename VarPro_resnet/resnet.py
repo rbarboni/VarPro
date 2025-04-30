@@ -117,10 +117,9 @@ def ResNet18(num_classes=10, in_channels=3, VarProTraining=True):
 #def ResNet34():
 #    return ResNet(BasicBlock, [3, 4, 6, 3])
 
-
-#def ResNet50():
-#    return ResNet(Bottleneck, [3, 4, 6, 3])
-
+def ResNet50(num_classes=10, in_channels=3, VarProTraining=True):
+    feature_model = ResNetFeatureModel(Bottleneck, [3, 4, 6, 3], in_channels=in_channels)
+    return VarProModel(feature_model, 512*4, num_classes, VarProTraining=VarProTraining)
 
 #def ResNet101():
 #    return ResNet(Bottleneck, [3, 4, 23, 3])
