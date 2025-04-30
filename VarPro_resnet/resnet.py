@@ -40,37 +40,6 @@ class BasicBlock(nn.Module):
         return out
 
 
-class Bottleneck(nn.Module):
-    expansion = 4
-
-    def __init__(self, in_planes, planes, stride=1):
-        super(Bottleneck, self).__init__()
-        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3,
-                               stride=stride, padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(planes)
-        self.conv3 = nn.Conv2d(planes, self.expansion *
-                               planes, kernel_size=1, bias=False)
-        self.bn3 = nn.BatchNorm2d(self.expansion*planes)
-
-        self.shortcut = nn.Sequential()
-        if stride != 1 or in_planes != self.expansion*planes:
-            self.shortcut = nn.Sequential(
-                nn.Conv2d(in_planes, self.expansion*planes,
-                          kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(self.expansion*planes)
-            )
-
-    def forward(self, x):
-        out = F.relu(self.bn1(self.conv1(x)))
-        out = F.relu(self.bn2(self.conv2(out)))
-        out = self.bn3(self.conv3(out))
-        out += self.shortcut(x)
-        out = F.relu(out)
-        return out
-
-
 class ResNetFeatureModel(nn.Module):
     def __init__(self, block, num_blocks, in_channels=3):
         super(ResNetFeatureModel, self).__init__()
@@ -134,42 +103,18 @@ class SimpleResNetFeatureModel(nn.Module):
         #out = self.linear(out)
         return out
     
-def ResNet9(num_classes=10, in_channels=3, VarProTraining=True):
+def ResNet10(num_classes=10, in_channels=3, VarProTraining=True):
     feature_model = ResNetFeatureModel(BasicBlock, [1, 1, 1, 1], in_channels=in_channels)
     return VarProModel(feature_model, 512, num_classes, VarProTraining=VarProTraining)
-
 
 def ResNet18(num_classes=10, in_channels=3, VarProTraining=True):
     feature_model = SimpleResNetFeatureModel(BasicBlock, [2, 2, 2, 2], in_channels=in_channels)
     return VarProModel(feature_model, 512, num_classes, VarProTraining=VarProTraining)
 
-def SimpleResNet9(num_classes=10, in_channels=3, VarProTraining=True):
-    feature_model = SimpleResNetFeatureModel(BasicBlock, [1, 1, 1], in_channels=in_channels)
-    return VarProModel(feature_model, 64, num_classes, VarProTraining=VarProTraining)
-
-def SimpleResNet18(num_classes=10, in_channels=3, VarProTraining=True):
+def SimpleResNet14(num_classes=10, in_channels=3, VarProTraining=True):
     feature_model = SimpleResNetFeatureModel(BasicBlock, [2, 2, 2], in_channels=in_channels)
     return VarProModel(feature_model, 64, num_classes, VarProTraining=VarProTraining)
 
-
-#def ResNet34():
-#    return ResNet(BasicBlock, [3, 4, 6, 3])
-
-def ResNet50(num_classes=10, in_channels=3, VarProTraining=True):
-    feature_model = ResNetFeatureModel(Bottleneck, [3, 4, 6, 3], in_channels=in_channels)
-    return VarProModel(feature_model, 512*4, num_classes, VarProTraining=VarProTraining)
-
-#def ResNet101():
-#    return ResNet(Bottleneck, [3, 4, 23, 3])
-
-
-#def ResNet152():
-#    return ResNet(Bottleneck, [3, 8, 36, 3])
-
-
-#def test():
-#    net = ResNet18()
-#    y = net(torch.randn(1, 3, 32, 32))
-#    print(y.size())
-
-# test()
+def SimpleResNet20(num_classes=10, in_channels=3, VarProTraining=True):
+    feature_model = SimpleResNetFeatureModel(BasicBlock, [3, 3, 3], in_channels=in_channels)
+    return VarProModel(feature_model, 64, num_classes, VarProTraining=VarProTraining)

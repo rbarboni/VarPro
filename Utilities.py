@@ -68,6 +68,19 @@ def weight_animation_2d(weight_array, name='animation.mp4'):
     writer = animation.FFMpegWriter(fps=fps)
     anim.save(name, writer = writer)
 
+def generate_periodic_distribution(N, dim=2, scale=1, gamma=100):
+    theta_list = []
+    for _ in range(dim):
+        Theta = 2 * np.pi * np.random.rand(N) - np.pi
+        W = torch.tensor([[np.cos(theta), np.sin(theta)] for theta in Theta], dtype=torch.float32)
+        W = W @ torch.tensor([[(1+gamma)**0.5, 0], [0, 1]], dtype=torch.float32)
+        W = W / torch.norm(W, 2, dim=-1, keepdim=True).expand_as(W)
+        Theta = circle_to_line(W.numpy())
+        Theta = (2*Theta + np.pi) % (2*np.pi) - np.pi
+        Theta = Theta / np.pi
+        theta_list.append(Theta)
+    return np.stack(theta_list, axis=1)
+
 ## density of diracs (with position in x on given interval) convolved with gaussians
 def gaussian_conv(x, coef=None, scale=1, interval=(-np.pi, np.pi), N_points=1000):
     res = np.zeros(N_points)

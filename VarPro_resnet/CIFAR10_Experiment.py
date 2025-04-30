@@ -21,9 +21,9 @@ parser.add_argument('--lmbda', '-l', type=float)  ## Regularization parameter
 
 ## Default arguments
 parser.add_argument('--batch_size', '-bs', type=int, default=128) ## Number of data samples
-parser.add_argument('--time_scale', '-ts', type=float, default=1e-4) ## Time scale of the gradient flow
+parser.add_argument('--time_scale', '-ts', type=float, default=1e-3) ## Time scale of the gradient flow
 parser.add_argument('--seed', '-s', type=int, default=0)  ## Random seed
-parser.add_argument('--progress', '-p', type=bool, default=False) ## Print progress during training
+parser.add_argument('--progress', '-p', action='store_true') ## Print progress during training
 parser.add_argument('--model', '-m', type=str, default='ResNet18') ## Model to use
 
 parser.add_argument('--name', type=str, default=None) ## Name of the file to save the experiment
@@ -32,14 +32,15 @@ parser.add_argument('--name', type=str, default=None) ## Name of the file to sav
 args, unknown = parser.parse_known_args()
 
 print('Starting experiment:')
-print(f'log10(lmbda)={np.log10(args.lmbda):.1f}, epochs={args.epochs}+3')
+print(f'Model={args.model}')
+print(f'log10(lmbda)={np.log10(args.lmbda):.1f}, epochs={args.epochs}+10')
 print(f'batch_size={args.batch_size}, log10(time_scale)={np.log10(args.time_scale):.1f}, seed={args.seed}')
 
 
 if args.name is not None:
     path = args.name + '.pkl.gz'
 else:
-    path = 'CIFAR10_'+args.model+f'_lmbda{np.log10(args.lmbda):.1f}_bs{args.batch_size}_ts{np.log10(args.time_scale):.1f}_seed{args.seed}.pkl.gz'
+    path = f'CIFAR10_{args.model}_lmbda{np.log10(args.lmbda):.1f}_bs{args.batch_size}_ts{np.log10(args.time_scale):.1f}_seed{args.seed}.pkl.gz'
 
 if os.path.exists(path):
     print('Experiments already exists, exiting')
@@ -79,17 +80,19 @@ testset = torchvision.datasets.CIFAR10(root='./cifar10_data',
 test_loader = torch.utils.data.DataLoader(testset, batch_size=1000, shuffle=False, num_workers=2)
 
 ## Student model
-model_dict = {'ResNet9': ResNet9,
+model_dict = {'ResNet10': ResNet10,
               'ResNet18': ResNet18,
-              'SimpleResNet9': SimpleResNet9,
-              'SimpleResNet18': SimpleResNet18,}
+              'SimpleResNet14': SimpleResNet14,
+              'SimpleResNet20': SimpleResNet20,}
 
 resnet = model_dict[args.model](in_channels=3, num_classes=10, VarProTraining=True)
 
 ## Learning problem
 
 lmbda = args.lmbda
-lr = 512 * args.time_scale
+width = resnet.outer.in_features
+lr = width * args.time_scale
+print(f'Learning rate={lr:.3f}')
 
 criterion = VarProCriterion(lmbda=lmbda, num_classes=10)
 
@@ -117,12 +120,12 @@ problem.train_and_eval(args.epochs,
                        subprogress=args.progress,
                        averaging=True)
 
-print('Changing learning rate for the last 3 epochs: lr=0.1*lr')
+print('Changing learning rate for the last 5 epochs: lr=0.1*lr')
 
 for param_group in problem.optimizer.param_groups:
     param_group['lr'] = 0.1 * lr
 
-problem.train_and_eval(3,
+problem.train_and_eval(5,
                        saving_step=1,
                        subprogress=args.progress,
                        averaging=True)
