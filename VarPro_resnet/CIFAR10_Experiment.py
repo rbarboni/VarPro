@@ -80,7 +80,9 @@ test_loader = torch.utils.data.DataLoader(testset, batch_size=1000, shuffle=Fals
 
 ## Student model
 model_dict = {'ResNet9': ResNet9,
-              'ResNet18': ResNet18}
+              'ResNet18': ResNet18,
+              'SimpleResNet9': SimpleResNet9,
+              'SimpleResNet18': SimpleResNet18,}
 
 resnet = model_dict[args.model](in_channels=3, num_classes=10, VarProTraining=True)
 
