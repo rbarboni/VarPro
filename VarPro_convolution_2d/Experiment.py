@@ -34,10 +34,12 @@ print('Starting experiment:')
 print(f'student_width={args.student_width}, log10(lmbda)={np.log10(args.lmbda):.1f}, epochs={args.epochs}')
 print(f'N={args.N}, gamma={args.gamma}, log2(time_scale)={np.log2(args.time_scale):.1f}, seed={args.seed}')
 
-path = f'width{args.student_width}_lmbda{np.log10(args.lmbda):.1f}_gamma{args.gamma:.1f}_N{args.N}_ts{np.log2(args.time_scale):.1f}_seed{args.seed}.pkl.gz'
-dico_path = 'dico_'+path
+if args.name is not None:
+    path = args.name + '.pkl.gz'
+else:
+    path = f'width{args.student_width}_lmbda{np.log10(args.lmbda):.1f}_gamma{args.gamma:.1f}_N{args.N}_ts{np.log2(args.time_scale):.1f}_seed{args.seed}.pkl.gz'
 
-if os.path.exists(path) or os.path.exists(dico_path):
+if os.path.exists(path):
     print('Experiments already exists, exiting')
     exit()
 
@@ -147,6 +149,6 @@ dico = {
     'elapsed_time': elapsed_time
 }
 
-print('Saving dictionnary as: '+dico_path)
-with gzip.open(dico_path, 'wb') as file:
+print('Saving dictionnary as: '+path)
+with gzip.open(path, 'wb') as file:
     pickle.dump(dico, file)
