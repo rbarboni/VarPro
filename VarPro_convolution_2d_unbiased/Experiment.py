@@ -43,29 +43,32 @@ if os.path.exists(path) or os.path.exists(dico_path):
 
 torch.manual_seed(args.seed)
 
-activation = nn.ReLU() ## activation function
-clipper = FeatureClipper(Normalization())
+
+
+scale = 0.5
+activation = ActivationFunction(lambda t: 2*torch.exp(-t/scale) / scale**2) ## activation function
+
+w_lim = 2
+clipping_function = PeriodicBoundaryCondition(x_min=-w_lim, x_max=w_lim)
+clipper = FeatureClipper(clipping_function)
 
 
 ## Teacher model
 teacher_width = args.teacher_width
-teacher = SHL(2, teacher_width, activation, bias=False, clipper=clipper)
 
-## Teacher feature distribution
-# the teacher distribution approximates a dirac, the parameter gamma constrols the shape of the distribution
+modes = w_lim * torch.tensor([[-0.5, 0], [0.5, 0.5]], dtype=torch.float32)
+
 gamma = args.gamma
 
-Theta = 2 * np.pi * np.random.rand(teacher_width) - np.pi
-teacher_init = torch.tensor([[np.cos(theta), np.sin(theta)] for theta in Theta], dtype=torch.float32)
-teacher_init = teacher_init @ torch.tensor([[(1+gamma)**0.5, 0], [0, 1]], dtype=torch.float32)
-teacher_init = teacher_init / torch.norm(teacher_init, 2, dim=-1, keepdim=True).expand_as(teacher_init)
-Theta = circle_to_line(teacher_init.numpy())
-Theta = 2*Theta
+teacher_weight = torch.tensor(generate_periodic_distribution(teacher_width, dim=2, gamma=gamma), dtype=torch.float32)
+teacher_weight[::2] += modes[0]
+teacher_weight[1::2] += modes[1]
 
-teacher_init = torch.tensor([[np.cos(theta), np.sin(theta)] for theta in Theta], dtype=torch.float32)
 
-teacher.feature_model.weight = nn.Parameter(data=teacher_init) ## teacher feature distribution
-teacher.outer.weight = nn.Parameter(data=torch.ones_like(teacher.outer.weight), requires_grad=False) ## teacher outer weight
+teacher = Convolution(2, teacher_width, activation, clipper=clipper)
+
+teacher.feature_model.weight = nn.Parameter(data=teacher_weight) ## teacher feature distribution
+teacher.outer.weight = nn.Parameter(data=torch.ones_like(teacher.outer.weight, dtype=torch.float32)) ## teacher outer weight
 
 teacher.clipper(teacher)
 teacher.apply(freeze)
@@ -80,9 +83,9 @@ train_loader = torch.utils.data.DataLoader(dataset, batch_size=len(dataset))
 ## Student model
 student_width = args.student_width
 
-student = SHL(2, student_width, activation, bias=False, clipper=clipper, VarProTraining=True)
+student = Convolution(2, student_width, activation, clipper=clipper, VarProTraining=True)
 
-student_init = torch.randn((student_width, 2), dtype=torch.float32)
+student_init = w_lim * (2 * torch.rand((student_width, 2), dtype=torch.float32) - 1)
 student.feature_model.weight = nn.Parameter(data=student_init, requires_grad=True)
 student.clipper(student)
 
@@ -91,7 +94,6 @@ student.clipper(student)
 lmbda = args.lmbda
 lr = student_width * args.time_scale
 
-print('Unbiased VarPro criterion')
 criterion = VarProCriterionUnbiased(lmbda=lmbda)
 
 print('Performing 1 projection step before training')
@@ -108,7 +110,7 @@ problem = LearningProblem(student, train_loader, optimizer, criterion)
 # VarPro training: only the feature model is trained
 assert hasattr(problem.criterion, 'projection')
 assert not problem.model.outer.weight.requires_grad
-print('VarPro Traning!')
+print('VarPro Training!')
 
 start = time.perf_counter()
 problem.train(args.epochs, progress=args.progress, saving_step=args.saving_step)
@@ -127,32 +129,6 @@ for i in distance_teacher_idx:
     w2 = teacher.feature_model.weight
     distance_teacher_list.append(compute_distance(DistanceMMD(), w1, w2).item())
 
-
-## Exact solution in 1d
-print('Computing MMD distance to exact diffusion')
-
-with gzip.open('../diffusion_relu1d_gamma100_ts-10.pkl.gz', 'rb') as file:
-    f_list = pickle.load(file)
-
-M = f_list.shape[1]
-X = np.linspace(-np.pi, np.pi, M+1)
-X = 0.5 * (X[1:]+X[:-1])
-
-w2 = torch.tensor([[np.cos(x), np.sin(x)] for x in X], dtype=torch.float32)
-
-distance_diffusion_list = []
-distance_diffusion_idx = [int(i) for i in np.linspace(0, args.epochs, 1001)]
-for i in distance_diffusion_idx:
-    w1 = problem.state_list[i]['feature_model.weight']
-    c2 = torch.tensor(f_list[i],dtype=torch.float32) * 2*np.pi / M
-    distance_diffusion_list.append(compute_distance(DistanceMMD(), w1, w2, c2=c2).item())
-
-
-## Saving Problem
-#print('Saving experiment as: '+path)
-#with gzip.open(path, 'wb') as file:
-#    pickle.dump(problem, file)
-
 ## Saving dictionnary
 dico = {
     'student_state_list': problem.state_list,
@@ -168,8 +144,6 @@ dico = {
     'time_scale': args.time_scale,
     'distance_teacher_list': distance_teacher_list,
     'distance_teacher_idx': distance_teacher_idx,
-    'distance_diffusion_list': distance_diffusion_list,
-    'distance_diffusion_idx': distance_diffusion_idx,
     'elapsed_time': elapsed_time
 }
 

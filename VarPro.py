@@ -255,7 +255,7 @@ class VarProCriterionUnbiased(nn.Module):
     def forward(self, inputs, targets, model):
         self.projection(inputs, targets, model)
         predictions = model(inputs)
-        return 0.5 * ((predictions - targets)**2).mean() / self.lmbda  + 0.5 * ((model.outer.weight-1)**2).mean()
+        return 0.5 * ((predictions - targets)**2).mean() / self.lmbda + 0.5 * ((model.outer.weight-1)**2).mean()
     
 
 # Classification loss with projection
