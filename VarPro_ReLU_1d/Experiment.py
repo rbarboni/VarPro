@@ -44,7 +44,9 @@ if os.path.exists(path):
     print('Experiments already exists, exiting')
     exit()
 
+## Fix random seed
 torch.manual_seed(args.seed)
+np.random.seed(args.seed)
 
 activation = nn.ReLU() ## activation function
 clipper = FeatureClipper(Normalization())
@@ -58,13 +60,7 @@ teacher = SHL(2, teacher_width, activation, bias=False, clipper=clipper)
 # the teacher distribution approximates a dirac, the parameter gamma constrols the shape of the distribution
 gamma = args.gamma
 
-Theta = 2 * np.pi * np.random.rand(teacher_width) - np.pi
-teacher_init = torch.tensor([[np.cos(theta), np.sin(theta)] for theta in Theta], dtype=torch.float32)
-teacher_init = teacher_init @ torch.tensor([[(1+gamma)**0.5, 0], [0, 1]], dtype=torch.float32)
-teacher_init = teacher_init / torch.norm(teacher_init, 2, dim=-1, keepdim=True).expand_as(teacher_init)
-Theta = circle_to_line(teacher_init.numpy())
-Theta = 2*Theta
-
+Theta = np.pi * generate_periodic_distribution(teacher_width, dim=1, gamma=gamma).squeeze()
 teacher_init = torch.tensor([[np.cos(theta), np.sin(theta)] for theta in Theta], dtype=torch.float32)
 
 teacher.feature_model.weight = nn.Parameter(data=teacher_init) ## teacher feature distribution
@@ -133,7 +129,7 @@ for i in distance_teacher_idx:
 ## Exact solution in 1d
 print('Computing MMD distance to exact diffusion')
 
-with gzip.open('../diffusion_relu1d_gamma100_ts-10.pkl.gz', 'rb') as file:
+with gzip.open(f'../diffusion_relu1d_gamma{gamma:.0f}_ts-10.pkl.gz', 'rb') as file:
     f_list = pickle.load(file)
 
 T_diffusion = f_list.shape[0] - 1

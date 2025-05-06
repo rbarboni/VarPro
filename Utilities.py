@@ -68,7 +68,7 @@ def weight_animation_2d(weight_array, name='animation.mp4'):
     writer = animation.FFMpegWriter(fps=fps)
     anim.save(name, writer = writer)
 
-def generate_periodic_distribution(N, dim=2, scale=1, gamma=100):
+def generate_periodic_distribution(N, dim=2, gamma=100):
     theta_list = []
     for _ in range(dim):
         Theta = 2 * np.pi * np.random.rand(N) - np.pi

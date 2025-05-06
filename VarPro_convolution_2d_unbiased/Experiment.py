@@ -43,7 +43,9 @@ if os.path.exists(path):
     print('Experiments already exists, exiting')
     exit()
 
+## Fix random seed
 torch.manual_seed(args.seed)
+np.random.seed(args.seed)
 
 
 
