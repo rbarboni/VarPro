@@ -22,9 +22,7 @@ parser.add_argument('--lmbda', '-l', type=float)  ## Regularization parameter
 ## Default arguments
 parser.add_argument('--batch_size', '-bs', type=int, default=128) ## Number of data samples
 parser.add_argument('--time_scale', '-ts', type=float, default=1e-3) ## Time scale of the gradient flow
-parser.add_argument('--seed', '-s', type=int, default=0)  ## Random seed
 parser.add_argument('--progress', '-p', action='store_true') ## Print progress during training
-parser.add_argument('--model', '-m', type=str, default='ResNet18') ## Model to use
 
 parser.add_argument('--name', type=str, default=None) ## Name of the file to save the experiment
 
@@ -34,19 +32,17 @@ args, unknown = parser.parse_known_args()
 print('Starting experiment:')
 print(f'Model={args.model}')
 print(f'log10(lmbda)={np.log10(args.lmbda):.1f}, epochs={args.epochs}+10')
-print(f'batch_size={args.batch_size}, log10(time_scale)={np.log10(args.time_scale):.1f}, seed={args.seed}')
+print(f'batch_size={args.batch_size}, log10(time_scale)={np.log10(args.time_scale):.1f}')
 
 
 if args.name is not None:
     path = args.name + '.pkl.gz'
 else:
-    path = f'CIFAR10_{args.model}_lmbda{np.log10(args.lmbda):.1f}_bs{args.batch_size}_ts{np.log10(args.time_scale):.1f}_seed{args.seed}.pkl.gz'
+    path = f'VarPro_ResNet20_{args.optimizer}_lmbda{np.log10(args.lmbda):.1f}_bs{args.batch_size}_ts{np.log10(args.time_scale):.1f}.pkl.gz'
 
 if os.path.exists(path):
     print('Experiments already exists, exiting')
     exit()
-
-torch.manual_seed(args.seed)
 
 
 # Data
@@ -80,12 +76,7 @@ testset = torchvision.datasets.CIFAR10(root='./cifar10_data',
 test_loader = torch.utils.data.DataLoader(testset, batch_size=1000, shuffle=False, num_workers=2)
 
 ## Student model
-model_dict = {'ResNet10': ResNet10,
-              'ResNet18': ResNet18,
-              'SimpleResNet14': SimpleResNet14,
-              'SimpleResNet20': SimpleResNet20,}
-
-resnet = model_dict[args.model](in_channels=3, num_classes=10, VarProTraining=True)
+resnet = ResNet20(in_channels=3, num_classes=10, VarProTraining=True)
 
 ## Learning problem
 
@@ -136,12 +127,13 @@ print(f'Finished! Training took {elapsed_time:.0f} seconds')
 
 ## Saving dictionnary
 dico = {
+    'model': 'ResNet20',
+    'optimizer': 'VarPro',
     'model_state_list': problem.state_list,
     'loss_list': problem.loss_list,
     'accuracy_list': problem.test_loss_list,
     'epochs': args.epochs,
     'bacth_size': args.batch_size,
-    'seed': args.seed,
     'lmbda': lmbda,
     'time_scale': args.time_scale,
     'elapsed_time': elapsed_time

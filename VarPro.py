@@ -275,12 +275,15 @@ class ClassifAccuracy(nn.Module):
     
 # least square criterion with general regularization
 class TwoTimescaleCriterion(nn.Module):
-    def __init__(self, lmbda, regularization_function):
+    def __init__(self, lmbda, regularization_function, num_classes=None):
         super().__init__()
         self.lmbda = lmbda
         self.regularization_function = regularization_function
+        self.num_classes = num_classes
         
     def forward(self, inputs, targets, model):
+        if self.num_classes is not None:
+            targets = nn.functional.one_hot(targets, num_classes=self.num_classes).to(device=inputs.device, dtype=inputs.dtype)
         predictions = model(inputs)
         return 0.5 * ((predictions - targets)**2).mean() / self.lmbda + self.regularization_function(model.outer.weight).mean()
     
