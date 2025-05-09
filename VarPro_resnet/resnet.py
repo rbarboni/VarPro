@@ -41,7 +41,7 @@ class BasicBlock(nn.Module):
     
 class ResNetFeatureModel(nn.Module):
     def __init__(self, block, num_blocks, in_channels=3):
-        super(SimpleResNetFeatureModel, self).__init__()
+        super(ResNetFeatureModel, self).__init__()
         self.in_planes = 16
 
         self.conv1 = nn.Conv2d(in_channels, 16, kernel_size=3,

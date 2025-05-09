@@ -17,10 +17,10 @@ parser = argparse.ArgumentParser()
 
 ## Mandatory arguments
 parser.add_argument('--epochs', '-e', type=int) ## Number of epochs
-parser.add_argument('--lmbda', '-l', type=float)  ## Regularization parameter
+parser.add_argument('--batch_size', '-bs', type=int) ## Number of data samples
 
 ## Default arguments
-parser.add_argument('--batch_size', '-bs', type=int, default=128) ## Number of data samples
+parser.add_argument('--lmbda', '-l', type=float, default=1e-3)  ## Regularization parameter
 parser.add_argument('--time_scale', '-ts', type=float, default=1e-3) ## Time scale of the gradient flow
 parser.add_argument('--progress', '-p', action='store_true') ## Print progress during training
 
@@ -30,7 +30,8 @@ parser.add_argument('--name', type=str, default=None) ## Name of the file to sav
 args, unknown = parser.parse_known_args()
 
 print('Starting experiment:')
-print(f'Model={args.model}')
+print('Model = ResNet20')
+print('Optimizer = VarPro')
 print(f'log10(lmbda)={np.log10(args.lmbda):.1f}, epochs={args.epochs}+10')
 print(f'batch_size={args.batch_size}, log10(time_scale)={np.log10(args.time_scale):.1f}')
 
@@ -38,7 +39,7 @@ print(f'batch_size={args.batch_size}, log10(time_scale)={np.log10(args.time_scal
 if args.name is not None:
     path = args.name + '.pkl.gz'
 else:
-    path = f'SGD_ResNet20_{args.optimizer}_lmbda{np.log10(args.lmbda):.1f}_bs{args.batch_size}_ts{np.log10(args.time_scale):.1f}.pkl.gz'
+    path = f'VarPro_lmbda{np.log10(args.lmbda):.1f}_bs{args.batch_size}_ts{np.log10(args.time_scale):.1f}.pkl.gz'
 
 if os.path.exists(path):
     print('Experiments already exists, exiting')
@@ -76,39 +77,20 @@ testset = torchvision.datasets.CIFAR10(root='./cifar10_data',
 test_loader = torch.utils.data.DataLoader(testset, batch_size=1000, shuffle=False, num_workers=2)
 
 ## Student model
-resnet = ResNet20(in_channels=3, num_classes=10, VarProTraining=False)
+resnet = ResNet20(in_channels=3, num_classes=10, VarProTraining=True)
 
 ## Learning problem
 
 lmbda = args.lmbda
 width = resnet.outer.in_features
 lr = width * args.time_scale
-lr_outer = lmbda * width
 print(f'Learning rate={lr:.3f}')
-print(f'Learning rat ratioe={lr_outer / lr:.2f}')
 
-regularization = power_regularization(p=2)
-
-criterion = TwoTimescaleCriterion(lmbda=lmbda, regularization_function=regularization, num_classes=10)
+criterion = VarProCriterion(lmbda=lmbda, num_classes=10)
 
 test_criterion = ClassifAccuracy(num_classes=10) # top_1 accuracy by default
 
-## Performing projection of the outer layer before training
-print('Performing one projection step before training')
-optimizer = torch.optim.SGD(resnet.outer.parameters(), lr=0.2*lr_outer)
-
-subproblem = LearningProblem(resnet,
-                          train_loader,
-                          optimizer,
-                          criterion)
-
-subproblem.train(2, progress=False)
-
-
-## Training
-
 optimizer = torch.optim.SGD(resnet.feature_model.parameters(), lr=lr)
-optimizer.add_param_group({'lr':lr_outer, 'params': resnet.outer.weight})
 
 problem = LearningProblem(resnet,
                           train_loader,
@@ -117,23 +99,25 @@ problem = LearningProblem(resnet,
                           test_criterion=test_criterion,
                           test_loader=test_loader)
 
-assert not hasattr(problem.criterion, 'projection')
-assert problem.model.outer.weight.requires_grad
-print('2TS Training!')
+## Training
+# VarPro training: only the feature model is trained
+assert hasattr(problem.criterion, 'projection')
+assert not problem.model.outer.weight.requires_grad
+print('VarPro Training!')
 
 start = time.perf_counter()
 
 problem.train_and_eval(args.epochs,
                        saving_step=1,
                        subprogress=args.progress,
-                       averaging=False)
+                       averaging=True)
 
-print('Changing learning rate for the last 5 epochs: lr=0.1*lr')
+print('Changing learning rate for the last 10 epochs: lr=0.5*lr')
 
 for param_group in problem.optimizer.param_groups:
-    param_group['lr'] = 0.1 * lr
+    param_group['lr'] = 0.5 * lr
 
-problem.train_and_eval(5,
+problem.train_and_eval(10,
                        saving_step=1,
                        subprogress=args.progress,
                        averaging=True)
@@ -145,7 +129,7 @@ print(f'Finished! Training took {elapsed_time:.0f} seconds')
 ## Saving dictionnary
 dico = {
     'model': 'ResNet20',
-    'optimizer': '2TS',
+    'optimizer': 'VarPro',
     'model_state_list': problem.state_list,
     'loss_list': problem.loss_list,
     'accuracy_list': problem.test_loss_list,

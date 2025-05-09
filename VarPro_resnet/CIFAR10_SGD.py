@@ -17,10 +17,10 @@ parser = argparse.ArgumentParser()
 
 ## Mandatory arguments
 parser.add_argument('--epochs', '-e', type=int) ## Number of epochs
-parser.add_argument('--lmbda', '-l', type=float)  ## Regularization parameter
+parser.add_argument('--batch_size', '-bs', type=int) ## Number of data samples
 
 ## Default arguments
-parser.add_argument('--batch_size', '-bs', type=int, default=128) ## Number of data samples
+parser.add_argument('--lmbda', '-l', type=float, default=1e-3)  ## Regularization parameter
 parser.add_argument('--time_scale', '-ts', type=float, default=1e-3) ## Time scale of the gradient flow
 parser.add_argument('--progress', '-p', action='store_true') ## Print progress during training
 
@@ -30,7 +30,8 @@ parser.add_argument('--name', type=str, default=None) ## Name of the file to sav
 args, unknown = parser.parse_known_args()
 
 print('Starting experiment:')
-print(f'Model={args.model}')
+print(f'Model = ResNet20')
+print(f'Optimizer = SGD')
 print(f'log10(lmbda)={np.log10(args.lmbda):.1f}, epochs={args.epochs}+10')
 print(f'batch_size={args.batch_size}, log10(time_scale)={np.log10(args.time_scale):.1f}')
 
@@ -38,7 +39,7 @@ print(f'batch_size={args.batch_size}, log10(time_scale)={np.log10(args.time_scal
 if args.name is not None:
     path = args.name + '.pkl.gz'
 else:
-    path = f'SGD_ResNet20_{args.optimizer}_lmbda{np.log10(args.lmbda):.1f}_bs{args.batch_size}_ts{np.log10(args.time_scale):.1f}.pkl.gz'
+    path = f'SGD_lmbda{np.log10(args.lmbda):.1f}_bs{args.batch_size}_ts{np.log10(args.time_scale):.1f}.pkl.gz'
 
 if os.path.exists(path):
     print('Experiments already exists, exiting')
@@ -93,7 +94,7 @@ test_criterion = ClassifAccuracy(num_classes=10) # top_1 accuracy by default
 
 
 ## Training
-# VarPro training: only the feature model is trained
+# SGD: every parameter is trained with the same learning rate
 optimizer = torch.optim.SGD(resnet.parameters(), lr=lr)
 
 problem = LearningProblem(resnet,
@@ -114,12 +115,12 @@ problem.train_and_eval(args.epochs,
                        subprogress=args.progress,
                        averaging=False)
 
-print('Changing learning rate for the last 5 epochs: lr=0.1*lr')
+print('Changing learning rate for the last 10 epochs: lr=0.5*lr')
 
 for param_group in problem.optimizer.param_groups:
-    param_group['lr'] = 0.1 * lr
+    param_group['lr'] = 0.5 * lr
 
-problem.train_and_eval(5,
+problem.train_and_eval(10,
                        saving_step=1,
                        subprogress=args.progress,
                        averaging=False)

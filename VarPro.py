@@ -104,7 +104,7 @@ class LearningProblem():
                 self.state_list.append(copy.deepcopy(self.model.state_dict()))
             if progress:
                 iterator.set_description(f'log10(loss) = {np.log10(self.loss_list[-1]):.2f}')
-            elif (i+1) % (epochs // 100) == 0:
+            elif epochs > 100 and (i+1) % (epochs // 100) == 0:
                 print(f'{100 * (i+1) / epochs:.0f}% elapsed, log10(loss)={np.log10(self.loss_list[-1]):.2f}')
 
     def train_and_eval(self, epochs, saving_step=1, subprogress=False, averaging=False):
@@ -202,8 +202,11 @@ def Convolution(input_dim, width, activation, VarProTraining=True, clipper=None)
 ## Criterions
 # perform projection on the outer layer
 class ExactRidgeProjection():
-    def __init__(self, lmbda):
+    def __init__(self, lmbda, momentum=None):
         self.lmbda = lmbda
+        if momentum is not None and not (momentum >= 0 and momentum < 1):
+            raise ValueError('momentum should be between 0 and 1')
+        self.momentum = momentum
 
     @torch.no_grad()
     def __call__(self, inputs, targets, model, requires_grad=False):
@@ -215,6 +218,8 @@ class ExactRidgeProjection():
         else: ## overparameterized case
             K = (features @ features.T) / (batch_size*width)
             u = torch.linalg.solve(K + self.lmbda * torch.eye(batch_size).to(K.device), targets.T, left=False) @ features / batch_size
+        if self.momentum is not None:
+            u = self.momentum * model.outer.weight + (1-self.momentum) * u
         model.outer.weight = nn.Parameter(data=u, requires_grad=requires_grad)
 
 # perform projection on the outer layer with the unbiasing -1 term
@@ -232,10 +237,10 @@ class ExactRidgeProjectionUnbiased():
 
 # least square criterion with projection
 class VarProCriterion(nn.Module):
-    def __init__(self, lmbda, num_classes=None):
+    def __init__(self, lmbda, num_classes=None, momentum=None):
         super().__init__()
         self.lmbda = lmbda
-        self.projection = ExactRidgeProjection(lmbda=lmbda)
+        self.projection = ExactRidgeProjection(lmbda=lmbda, momentum=momentum)
         self.num_classes = num_classes
         
     def forward(self, inputs, targets, model):
