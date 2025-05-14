@@ -58,18 +58,22 @@ clipper = FeatureClipper(clipping_function)
 
 
 ## Teacher model
-teacher_width = args.teacher_width
 
 modes = w_lim * torch.tensor([[-0.5, 0], [0.5, 0.5]], dtype=torch.float32)
 
 gamma = args.gamma
 
-teacher_weight = torch.tensor(generate_periodic_distribution(teacher_width, dim=2, gamma=gamma), dtype=torch.float32)
-teacher_weight[::2] += modes[0]
-teacher_weight[1::2] += modes[1]
+if gamma < 0:
+    teacher_width = 2
+    teacher_weight = modes
+else:
+    teacher_width = args.teacher_width
+    teacher_weight = w_lim * torch.tensor(generate_periodic_distribution(teacher_width, dim=2, gamma=gamma), dtype=torch.float32)
+    teacher_weight[::2] += modes[0]
+    teacher_weight[1::2] += modes[1]
 
 
-teacher = Convolution(2, teacher_width, activation, clipper=clipper)
+teacher = Convolution(2, teacher_width, activation, clipper=clipper, projection=clipping_function)
 
 teacher.feature_model.weight = nn.Parameter(data=teacher_weight) ## teacher feature distribution
 teacher.outer.weight = nn.Parameter(data=torch.ones_like(teacher.outer.weight, dtype=torch.float32)) ## teacher outer weight
@@ -87,7 +91,7 @@ train_loader = torch.utils.data.DataLoader(dataset, batch_size=len(dataset))
 ## Student model
 student_width = args.student_width
 
-student = Convolution(2, student_width, activation, clipper=clipper, VarProTraining=True)
+student = Convolution(2, student_width, activation, clipper=clipper, VarProTraining=True, projection=clipping_function)
 
 student_init = w_lim * (2 * torch.rand((student_width, 2), dtype=torch.float32) - 1)
 student.feature_model.weight = nn.Parameter(data=student_init, requires_grad=True)
@@ -131,7 +135,7 @@ distance_teacher_idx = [int(i) for i in np.linspace(0, args.epochs, 1001)]
 for i in distance_teacher_idx:
     w1 = problem.state_list[i]['feature_model.weight']
     w2 = teacher.feature_model.weight
-    distance_teacher_list.append(compute_distance(DistanceMMD(), w1, w2).item())
+    distance_teacher_list.append(compute_distance(DistanceMMD(projection=clipping_function), w1, w2).item())
 
 ## Saving dictionnary
 dico = {

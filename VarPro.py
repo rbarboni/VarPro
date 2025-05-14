@@ -160,42 +160,26 @@ class SHLFeatureModel(nn.Module):
 
     def forward(self, x):
         return self.activation(nn.functional.linear(x, self.weight, self.bias))
-    
-class SignedSHLFeatureModel(nn.Module):
-    def __init__(self, input_dim, width, activation, bias=False):
-        super().__init__()
-        self.weight = nn.Parameter(data=torch.randn(width, input_dim), requires_grad=True)
-        self.sign = nn.Parameter(data=torch.randn(width), requires_grad=True)
-        self.activation = activation
-        if bias:
-            self.bias = nn.Parameter(data=torch.zeros(width), requires_grad=True)
-        else:
-            self.bias = None
 
-    def forward(self, x):
-        return self.activation(nn.functional.linear(x, self.weight, self.bias)) @ torch.diag(self.sign)
     
 # feature model for a convolution
 class ConvolutionFeatureModel(nn.Module):
-    def __init__(self, input_dim, width, activation):
+    def __init__(self, input_dim, width, activation, projection=nn.Identity()):
         super().__init__()
         self.weight = nn.Parameter(data=torch.randn(width, input_dim), requires_grad=True)
         self.activation = activation
+        self.projection = projection
 
     def forward(self, x):
-        return self.activation(torch.linalg.vector_norm(self.weight.T[None,:,:] - x[:,:,None], dim=1))
+        return self.activation(torch.linalg.vector_norm(self.projection(self.weight.T[None,:,:] - x[:,:,None]), dim=1))
 
 ## Models constructors
 def SHL(input_dim, width, activation, bias=False, VarProTraining=True, clipper=None):
     feature_model = SHLFeatureModel(input_dim, width, activation, bias=bias)
     return VarProModel(feature_model, width, 1, VarProTraining=VarProTraining, clipper=clipper)
 
-def SignedSHL(input_dim, width, activation, bias=False, VarProTraining=True, clipper=None):
-    feature_model = SignedSHLFeatureModel(input_dim, width, activation, bias=bias)
-    return VarProModel(feature_model, width, 1, VarProTraining=VarProTraining, clipper=clipper)
-
-def Convolution(input_dim, width, activation, VarProTraining=True, clipper=None):
-    feature_model = ConvolutionFeatureModel(input_dim, width, activation)
+def Convolution(input_dim, width, activation, projection=nn.Identity(), VarProTraining=True, clipper=None):
+    feature_model = ConvolutionFeatureModel(input_dim, width, activation, projection=projection)
     return VarProModel(feature_model, width, 1, VarProTraining=VarProTraining, clipper=clipper)
 
 
