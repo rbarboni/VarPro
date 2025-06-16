@@ -59,7 +59,12 @@ teacher = SHL(2, teacher_width, activation, bias=False, clipper=clipper)
 # the teacher distribution approximates a dirac, the parameter gamma constrols the shape of the distribution
 gamma = args.gamma
 
+modes = np.pi * np.array([0, 0.4])
+
 Theta = np.pi * generate_periodic_distribution(teacher_width, dim=1, gamma=gamma).squeeze()
+
+Theta[1::3] += modes[1]
+
 teacher_init = torch.tensor([[np.cos(theta), np.sin(theta)] for theta in Theta], dtype=torch.float32)
 
 teacher.feature_model.weight = nn.Parameter(data=teacher_init) ## teacher feature distribution
@@ -94,10 +99,7 @@ criterion = VarProCriterionUnbiased(lmbda=lmbda)
 
 print('Performing 1 projection step before training')
 inputs, targets = next(iter(train_loader))
-#inputs, targets = inputs.to(device), targets.to(device)
-#student.to(device)
 criterion.projection(inputs, targets, student)
-#student.to(torch.device('cpu'))
 
 optimizer = torch.optim.SGD([student.feature_model.weight], lr=lr)
 problem = LearningProblem(student, train_loader, optimizer, criterion)
