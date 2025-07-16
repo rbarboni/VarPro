@@ -4,6 +4,7 @@ import numpy as np
 import ot
 import matplotlib.pyplot as plt
 from matplotlib import cm
+import matplotlib.colors as mcolors
 import matplotlib.animation as animation
 from tqdm import tqdm
 
@@ -45,12 +46,9 @@ def model_plot_2d(model, add_one=False, N_points=100, x_lim=(-5,5), plot=True): 
         plt.show()
     return xx, yy, zz
 
-def weight_animation_2d(weight_array, name='animation.mp4'):
-    fig = plt.figure(figsize=(10, 3))
-    ax = fig.add_subplot()
+def scatter_animation_2d(weight_array, x_min, x_max, y_min, y_max, time=10, fps=10):
+    fig, ax = plt.subplots()
     
-    x_min, x_max = np.min(weight_array[:,:,0])-0.2, np.max(weight_array[:,:,0])+0.2
-    y_min, y_max = np.min(weight_array[:,:,1])-0.2, np.max(weight_array[:,:,1])+0.2
     ax.set_xlim(x_min, x_max)
     ax.set_ylim(y_min, y_max)
     ax.set_aspect('equal')
@@ -60,13 +58,69 @@ def weight_animation_2d(weight_array, name='animation.mp4'):
         points.set_data(weight_array[i,:,0], weight_array[i,:,1])
         return points
     
-    time = 20
-    fps = 10
     frames = time * fps
     rate = weight_array.shape[0] // frames
     anim = animation.FuncAnimation(fig, lambda i: animate(rate*i), frames, blit=False, interval=1)
-    writer = animation.FFMpegWriter(fps=fps)
-    anim.save(name, writer = writer)
+
+    return anim
+
+def density_animation_2d(weight_list, x_min, x_max, y_min, y_max, grid_size=200, bandwidth=None, time=10, fps=10, cmap='coolwarm', colorbar=True):
+    # Create grid
+    x = np.linspace(x_min, x_max, grid_size)
+    y = np.linspace(y_min, y_max, grid_size)
+    X, Y = np.meshgrid(x, y, indexing='ij')  # shape: (grid_size, grid_size)
+
+    # Evaluate KDE on the grid
+    coords = np.stack([X.ravel(), Y.ravel()])  # shape: (2, grid_size^2)
+
+    frames = time * fps
+    rate = len(weight_list) // frames
+    idx = np.arange(0, len(weight_list), rate)
+
+    print("Computing KDE for each frame...")
+    Z_list = []
+    for i in tqdm(idx):
+        # KDE expects shape (2, N)
+        kde = gaussian_kde(weight_list[i].T, bw_method=bandwidth)
+        Z = kde(coords).reshape((grid_size, grid_size))  # density values
+        Z_list.append(Z)
+
+    Z_array = np.array(Z_list)
+    vmin = Z_array.min()
+    vmax = Z_array.max()
+    #norm = mcolors.Norm(vmin=vmin, vmax=vmax)
+
+    fig, ax = plt.subplots()
+    cax = ax.pcolormesh(X, Y, Z_array[0], shading='auto', cmap=cmap, vmin=vmin, vmax=vmax)
+    if colorbar:
+        fig.colorbar(cax, ax=ax)
+
+    def update(i):
+        cax.set_array(Z_array[i])
+        return [cax]
+    
+    print("Creating animation...")
+    anim = animation.FuncAnimation(fig, update, frames, blit=False, interval=1)
+
+    return anim
+
+def density_list_2d(weight_list, x_min, x_max, y_min, y_max, grid_size=200, bandwidth=None):
+    # Create grid
+    x = np.linspace(x_min, x_max, grid_size)
+    y = np.linspace(y_min, y_max, grid_size)
+    X, Y = np.meshgrid(x, y, indexing='ij')  # shape: (grid_size, grid_size)
+
+    # Evaluate KDE on the grid
+    coords = np.stack([X.ravel(), Y.ravel()])  # shape: (2, grid_size^2)
+
+    res = []
+    for weight in tqdm(weight_list):
+        # KDE expects shape (2, N)
+        kde = gaussian_kde(weight.T, bw_method=bandwidth)
+        Z = kde(coords).reshape((grid_size, grid_size))  # density values
+        res.append(Z)
+    
+    return X, Y, res
 
 def generate_periodic_distribution(N, dim=2, gamma=100):
     theta_list = []
@@ -92,6 +146,23 @@ def gaussian_conv(x, coef=None, scale=1, interval=(-np.pi, np.pi), N_points=1000
     for i in range(len(x)):
         res += coef[i] * np.exp(- 0.5 * (z_min + (z-x[i]-z_min) % (z_max-z_min))**2 / scale**2)
     return z, normalize(res, interval=interval)
+
+from scipy.stats import gaussian_kde
+
+def density_estimation_2d(points, x_min, x_max, y_min, y_max, grid_size=100, bandwidth=None):
+    # KDE expects shape (2, N)
+    kde = gaussian_kde(points.T, bw_method=bandwidth)
+    
+    # Create grid
+    x = np.linspace(x_min, x_max, grid_size)
+    y = np.linspace(y_min, y_max, grid_size)
+    X, Y = np.meshgrid(x, y, indexing='ij')  # shape: (grid_size, grid_size)
+
+    # Evaluate KDE on the grid
+    coords = np.stack([X.ravel(), Y.ravel()])  # shape: (2, grid_size^2)
+    Z = kde(coords).reshape((grid_size, grid_size))  # density values
+
+    return X, Y, Z
 
 def circle_to_line(x):
     return 2 * np.arctan( x[:,1] / (1+x[:,0]))
