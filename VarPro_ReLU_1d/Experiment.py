@@ -39,6 +39,9 @@ if args.name is not None:
     path = args.name + '.pkl.gz'
 else:
     path = f'width{args.student_width}_lmbda{np.log10(args.lmbda):.1f}_gamma{args.gamma:.1f}_N{args.N}_ts{np.log2(args.time_scale):.1f}_seed{args.seed}.pkl.gz'
+os.makedirs("results", exist_ok=True)
+path = os.path.join("results", path)
+
 
 if os.path.exists(path):
     print('Experiments already exists, exiting')
