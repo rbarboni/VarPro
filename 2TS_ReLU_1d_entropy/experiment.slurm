@@ -9,10 +9,10 @@
 #SBATCH --hint=nomultithread   # 1 processus MPI par coeur physique (pas d'hyperthreading)
 #SBATCH --cpus-per-task=10
 #SBATCH --gres=gpu:1
-#SBATCH --time=02:00:00        # Temps d’exécution maximum demande (HH:MM:SS)
+#SBATCH --time=06:00:00        # Temps d’exécution maximum demande (HH:MM:SS)
 #SBATCH --output=output_%x_%A_%a.out  # Nom du fichier de sortie contenant l'ID et l'indice
 #SBATCH --error=output_%x_%A_%a.out   # Nom du fichier d'erreur (ici commun avec la sortie)
-#SBATCH --array=32,128,512,1024      # indices des travaux
+#SBATCH --array=1,2,3,4,5      # indices des travaux
 
 module purge
 module load pytorch-gpu/py3/2.3.0
@@ -21,5 +21,11 @@ module load pytorch-gpu/py3/2.3.0
 set -x
 
 # La valeur de ${SLURM_ARRAY_TASK_ID} est differente pour chaque travail.
-srun python Experiment.py --lmbda 1e-2 --student_width ${SLURM_ARRAY_TASK_ID} --epochs 32000
-srun python Experiment.py --lmbda 1e-1 --student_width ${SLURM_ARRAY_TASK_ID} --epochs 32000
+srun python Experiment.py --lmbda 1e-2 --student_width 1024 --seed ${SLURM_ARRAY_TASK_ID} --epochs 32000
+srun python Experiment.py --lmbda 1e-2 --student_width 512 --seed ${SLURM_ARRAY_TASK_ID} --epochs 32000
+srun python Experiment.py --lmbda 1e-2 --student_width 128 --seed ${SLURM_ARRAY_TASK_ID} --epochs 32000
+srun python Experiment.py --lmbda 1e-2 --student_width 32 --seed ${SLURM_ARRAY_TASK_ID} --epochs 32000
+srun python Experiment.py --lmbda 1e-1 --student_width 1024 --seed ${SLURM_ARRAY_TASK_ID} --epochs 32000
+srun python Experiment.py --lmbda 1e-1 --student_width 512 --seed ${SLURM_ARRAY_TASK_ID} --epochs 32000
+srun python Experiment.py --lmbda 1e-1 --student_width 128 --seed ${SLURM_ARRAY_TASK_ID} --epochs 32000
+srun python Experiment.py --lmbda 1e-1 --student_width 32 --seed ${SLURM_ARRAY_TASK_ID} --epochs 32000
