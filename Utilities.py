@@ -8,6 +8,8 @@ import matplotlib.colors as mcolors
 import matplotlib.animation as animation
 from tqdm import tqdm
 
+from scipy.stats import gaussian_kde
+
 
 
 ## Utilities
@@ -147,9 +149,20 @@ def gaussian_conv(x, coef=None, scale=1, interval=(-np.pi, np.pi), N_points=1000
         res += coef[i] * np.exp(- 0.5 * (z_min + (z-x[i]-z_min) % (z_max-z_min))**2 / scale**2)
     return z, normalize(res, interval=interval)
 
-from scipy.stats import gaussian_kde
+def density_estimation_1d(points, x_min, x_max, grid_size=500, bandwidth=None):
+    # KDE expects shape (2, N)
+    kde = gaussian_kde(points, bw_method=bandwidth)
+    
+    # Create grid
+    X = np.linspace(x_min, x_max, grid_size+1)
+    X = 0.5 * (X[1:] + X[:-1])
 
-def density_estimation_2d(points, x_min, x_max, y_min, y_max, grid_size=100, bandwidth=None):
+    # Evaluate KDE on the grid
+    Z = kde(X) # density values
+
+    return X, normalize(Z, interval=(x_min, x_max))
+
+def density_estimation_2d(points, x_min, x_max, y_min, y_max, grid_size=500, bandwidth=None):
     # KDE expects shape (2, N)
     kde = gaussian_kde(points.T, bw_method=bandwidth)
     
