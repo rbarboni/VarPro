@@ -22,7 +22,7 @@ parser.add_argument('--N', '-N', type=int, default=4096) ## Number of data sampl
 parser.add_argument('--teacher_width', type=int, default=4096) ## Width of the teacher model
 parser.add_argument('--time_scale', type=float, default=2**(-10)) ## Time scale of the gradient flow
 parser.add_argument('--seed', type=int, default=0)  ## Random seed
-parser.add_argument('--progress', type=bool, default=False) ## Print progress during training
+parser.add_argument('--progress', '-p', action='store_true') ## Print progress during training
 parser.add_argument('--saving_step', type=int, default=1) ## Save the model every saving_step epochs
 
 parser.add_argument('--name', type=str, default=None) ## Name of the file to save the experiment
@@ -111,7 +111,7 @@ problem = LearningProblem(student, train_loader, optimizer, criterion)
 # VarPro training: only the feature model is trained
 assert hasattr(problem.criterion, 'projection')
 assert not problem.model.outer.weight.requires_grad
-print('VarPro Traning!')
+print('VarPro Training!')
 
 start = time.perf_counter()
 problem.train(args.epochs, progress=args.progress, saving_step=args.saving_step)
