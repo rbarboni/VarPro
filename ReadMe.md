@@ -1,13 +1,16 @@
-# Reproducing the experiments
-
 This repo provides the code to reproduce the numerical result presented in the paper:
 ["Ultra-fast feature learning for the training of two-layer neural networks in the two-timescale regime"](https://arxiv.org/abs/2504.18208)
 
-## SHL in 1d with ReLU activation (Section 6.1)
+# SHL in 1d with ReLU activation (Section 6.1)
 Experiments with SHL neural networks with features on $\mathbb{S}^1$.
 Experiments where performed using 32000 training epochs. The parameter `--epochs` can be changed to reduce training time.
 You might also want to change the `--seed`parameter to change the random seed.
 Once all experiments have been run you can reproduce the figures with the notebook `Results_SHL.ipynb`.
+Additionally an animated gif can be created with the notebook `1d_animations.ipynb`
+
+![](diffusion_animation.gif)
+
+
 
 ### Numerical resolution of ultra-fast diffusion
 To compare VarPro with the ultra-fast diffusion, it is first required to compute the solutions to ultra-fast diffusion with the corresponding values of $\gamma$, controlling the shape of the teacher distribution.
@@ -94,7 +97,7 @@ python Experiment.py --seed 0 --epochs 32000 --lambda 1e-2 --student_width 1024
 python Experiment.py --seed 0 --epochs 32000 --lambda 1e-3 --student_width 1024
 ```
 
-## ResNets for classification on CIFAR10 (Section 6.2)
+# ResNets for classification on CIFAR10 (Section 6.2)
 
 Once experiments are perfomed, the figures in Section 6.2 can be reproduced with the notebook `Results_resnets.ipynb`.
 The code for the experiments is located in the directory `VarPro_resnet`.
@@ -117,7 +120,7 @@ python CIFAR10_Shampoo.py --lmbda 1e-3 --batch_size 64 --time_scale 1e-2 --momen
 ```
 for `--batch_size` in `{64, 128, 256, 512, 1024}`.
 
-## RBF neural network in 2d with cos activation (Appendix B)
+# RBF neural network in 2d with cos activation (Appendix B)
 Experiments with RBF neural networks with features on $\Omega = \mathbb{R}^2/ 4 \mathbb{Z}^2$.
 Experiments where performed using 32000 training epochs. The parameter `--epochs` can be changed to reduce training time.
 You might also want to change the `--seed`parameter to change the random seed.
