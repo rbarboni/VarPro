@@ -131,7 +131,7 @@ for i in distance_teacher_idx:
     distance_teacher_list.append(compute_distance(DistanceMMD(), w1, w2).item())
 
 
-## Exact solution in 1d
+## MMD distance to xact solution in 1d
 print('Computing MMD distance to exact diffusion')
 
 with gzip.open(f'../diffusion_relu1d_gamma{args.gamma:.0f}_ts-10.pkl.gz', 'rb') as file:
@@ -144,7 +144,6 @@ X = 0.5 * (X[1:]+X[:-1])
 
 w2 = torch.tensor([[np.cos(x), np.sin(x)] for x in X], dtype=torch.float32)
 
-#ts_ratio = args.time_scale / 2**(-8)
 T_max = min(args.epochs, T_diffusion)
 
 distance_diffusion_list = []
@@ -155,11 +154,6 @@ for i in distance_diffusion_idx:
     c2 = torch.tensor(f_list[i],dtype=torch.float32) * 2*np.pi / M
     distance_diffusion_list.append(compute_distance(DistanceMMD(), w1, w2, c2=c2).item())
 
-
-## Saving Problem
-#print('Saving experiment as: '+path)
-#with gzip.open(path, 'wb') as file:
-#    pickle.dump(problem, file)
 
 ## Saving dictionnary
 dico = {

@@ -13,3 +13,4 @@ VarPro_resnet/mnist_data/*
 # Ignore all Jupyter Notebook files except the root one
 **/*.ipynb
 !/*.ipynb
+VarPro_ReLU_1d/Experiment_test.py
