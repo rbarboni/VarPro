@@ -49,7 +49,7 @@ for `--lambda`in `{1e-1, 1e-2, 1e-3, 1e-4}`.
 * Varying the shape parameter $\gamma$ of the teacher distribution:
 
 ```
-python Experiment.py --seed 0 --regularization 'unbiased' --epochs 32000 --lambda 1e-1 --student_width 1024 --gamma 10
+python Experiment.py --seed 0 --regularization 'unbiased' --epochs 32000 --lambda 1e-3 --student_width 1024 --gamma 10
 ```
 for `--gamma`in `{10, 100, 1000}`.
 

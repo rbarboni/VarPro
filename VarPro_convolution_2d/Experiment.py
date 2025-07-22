@@ -17,6 +17,7 @@ parser.add_argument('--epochs', type=int) ## Number of epochs
 parser.add_argument('--lmbda', type=float)  ## Regularization parameter
 
 ## Default arguments
+parser.add_argument('--regularization', '-r', type=str, choices=['biased', 'unbiased'], default='unbiased') ## Regularization type
 parser.add_argument('--gamma', type=float, default=100)  ## gamma controls the shape of the target distribution (converges to a dirac at gamma=\infty)
 parser.add_argument('--N', '-N', type=int, default=4096) ## Number of data samples
 parser.add_argument('--teacher_width', type=int, default=4096) ## Width of the teacher model
@@ -31,13 +32,14 @@ parser.add_argument('--name', type=str, default=None) ## Name of the file to sav
 args, unknown = parser.parse_known_args()
 
 print('Starting experiment:')
+print(f'method=VarPro, regularization={args.regularization}')
 print(f'student_width={args.student_width}, log10(lmbda)={np.log10(args.lmbda):.1f}, epochs={args.epochs}')
 print(f'N={args.N}, gamma={args.gamma}, log2(time_scale)={np.log2(args.time_scale):.1f}, seed={args.seed}')
 
 if args.name is not None:
     path = args.name + '.pkl.gz'
 else:
-    path = f'width{args.student_width}_lmbda{np.log10(args.lmbda):.1f}_gamma{args.gamma:.1f}_N{args.N}_ts{np.log2(args.time_scale):.1f}_seed{args.seed}.pkl.gz'
+    path = f'VarPro_{args.regularization}_width{args.student_width}_lmbda{np.log10(args.lmbda):.1f}_gamma{args.gamma:.1f}_N{args.N}_ts{np.log2(args.time_scale):.1f}_seed{args.seed}.pkl.gz'
 os.makedirs("results", exist_ok=True)
 path = os.path.join("results", path)
 
@@ -103,14 +105,16 @@ student.clipper(student)
 lmbda = args.lmbda
 lr = student_width * args.time_scale
 
-criterion = VarProCriterion(lmbda=lmbda)
+if args.regularization == 'biased':
+    print('Biased VarPro criterion')
+    criterion = VarProCriterion(lmbda=lmbda)
+else:
+    print('Unbiased VarPro criterion')
+    criterion = VarProCriterionUnbiased(lmbda=lmbda)
 
 print('Performing 1 projection step before training')
 inputs, targets = next(iter(train_loader))
-#inputs, targets = inputs.to(device), targets.to(device)
-#student.to(device)
 criterion.projection(inputs, targets, student)
-#student.to(torch.device('cpu'))
 
 optimizer = torch.optim.SGD([student.feature_model.weight], lr=lr)
 problem = LearningProblem(student, train_loader, optimizer, criterion)
@@ -140,6 +144,8 @@ for i in distance_teacher_idx:
 
 ## Saving dictionnary
 dico = {
+    'method': 'VarPro',
+    'regularization': args.regularization,
     'student_state_list': problem.state_list,
     'teacher_state': copy.deepcopy(teacher.state_dict()),
     'loss_list': problem.loss_list,

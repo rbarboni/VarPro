@@ -172,7 +172,7 @@ for i in distance_teacher_idx:
 ## Computing MMD distance to xact solution in 1d
 print('Computing MMD distance to exact diffusion')
 
-with gzip.open(f'../diffusion_relu1d_gamma{args.gamma:.0f}_ts-10.pkl.gz', 'rb') as file:
+with gzip.open(f'diffusion_relu1d_gamma{args.gamma:.0f}_ts-10.pkl.gz', 'rb') as file:
     f_list = pickle.load(file)
 
 T_diffusion = f_list.shape[0] - 1
