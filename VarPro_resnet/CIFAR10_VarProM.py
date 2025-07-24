@@ -113,8 +113,7 @@ start = time.perf_counter()
 
 problem.train_and_eval(args.epochs,
                        saving_step=1,
-                       subprogress=args.progress,
-                       averaging=False)
+                       subprogress=args.progress)
 
 print('Changing learning rate for the last 10 epochs: lr=0.5*lr')
 
@@ -123,8 +122,7 @@ for param_group in problem.optimizer.param_groups:
 
 problem.train_and_eval(10,
                        saving_step=1,
-                       subprogress=args.progress,
-                       averaging=False)
+                       subprogress=args.progress)
 
 stop = time.perf_counter()
 elapsed_time = stop - start

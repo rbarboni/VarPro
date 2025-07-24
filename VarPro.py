@@ -27,13 +27,10 @@ class CustomDataset(torch.utils.data.Dataset):
         return self.inputs[idx], self.labels[idx]
 
 ## Training routines
-def training_loop(model, train_loader, optimizer, criterion, progress=False, averaging=False):
+def training_loop(model, train_loader, optimizer, criterion, progress=False):
     loss_list = []
     model.to(device)
     model.train()
-
-    if averaging:
-        outer_weight_average = torch.zeros_like(model.outer.weight)
 
     iterator = tqdm(train_loader) if progress else train_loader
     for inputs, targets in iterator:
@@ -47,11 +44,6 @@ def training_loop(model, train_loader, optimizer, criterion, progress=False, ave
             model.clipper(model)
         if progress:
             iterator.set_description(f'log10(loss) = {np.log10(loss_list[-1]):.2f}')
-        if averaging:
-            outer_weight_average += model.outer.weight.clone().detach() / len(train_loader)
-    
-    if averaging:
-        model.outer.weight = nn.Parameter(data=outer_weight_average, requires_grad=False)
     
     model.to(torch.device('cpu'))
     return loss_list
@@ -122,6 +114,64 @@ class LearningProblem():
             print(f'{i+1} epochs elapsed, evaluation loss={self.test_loss_list[-1]:.3f}')
             if (i+1) % saving_step == 0:
                 self.state_list.append(copy.deepcopy(self.model.state_dict()))
+
+class LearningProblemTest():
+    def __init__(self, model, train_loader, optimizer, criterion, test_loader=None, test_criterion=None):
+        super().__init__()
+        self.model = model
+        self.state_list = [copy.deepcopy(self.model.state_dict())]
+
+        # attributes for training
+        self.train_loader = train_loader
+        self.optimizer = optimizer
+        self.criterion = criterion
+        self.loss_list = []
+        self.grad_steps = 0 # number of gradient steps taken
+        self.saving_step = len(self.train_loader) # number of steps between saving the model state
+        
+        # attributes for evaluation
+        if test_loader is not None and test_criterion is not None:
+            self.test_loader = test_loader
+            self.test_criterion = test_criterion
+            test_loss = evaluation_loop(self.model, self.test_loader, self.test_criterion)
+            self.test_loss_list = [test_loss]
+            print(f'0 epochs elapsed, evaluation loss={self.test_loss_list[-1]:.3f}')
+
+    def train(self, epochs, progress=True, subprogress=False):
+        if subprogress:
+            progress = False
+
+        iterator = tqdm(range(epochs)) if progress else range(epochs)
+        for epoch in iterator:
+
+            self.model.to(device)
+            self.model.train()
+
+            subiterator = tqdm(self.train_loader) if subprogress else self.train_loader
+            for inputs, targets in subiterator:
+                inputs, targets = inputs.to(device), targets.to(device)
+                self.optimizer.zero_grad()
+                loss = self.criterion(inputs, targets, self.model)
+                loss.backward()
+                self.optimizer.step()
+                self.loss_list.append(loss.item())
+
+                if hasattr(self.model, 'clipper'):
+                    self.model.clipper(self.model)
+
+                if subprogress:
+                    subiterator.set_description(f'log10(loss) = {np.log10(self.loss_list[-1]):.2f}')
+
+                self.grad_steps += 1
+                if self.grad_steps % saving_step == 0:
+                    self.state_list.append(copy.deepcopy({k: v.cpu() for k, v in self.model.state_dict().items()}))
+
+            self.model.to(torch.device('cpu'))
+
+            if progress:
+                iterator.set_description(f'log10(loss) = {np.log10(self.loss_list[-1]):.2f}')
+            elif epochs > 100 and (epoch+1) % (epochs // 100) == 0:
+                print(f'{100 * (epoch+1) / epochs:.0f}% elapsed, log10(loss)={np.log10(self.loss_list[-1]):.2f}')
                 
 
 ## Models
