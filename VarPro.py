@@ -163,7 +163,7 @@ class LearningProblemTest():
                     subiterator.set_description(f'log10(loss) = {np.log10(self.loss_list[-1]):.2f}')
 
                 self.grad_steps += 1
-                if self.grad_steps % saving_step == 0:
+                if self.grad_steps % self.saving_step == 0:
                     self.state_list.append(copy.deepcopy({k: v.cpu() for k, v in self.model.state_dict().items()}))
 
             self.model.to(torch.device('cpu'))
