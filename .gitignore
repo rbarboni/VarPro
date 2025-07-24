@@ -8,7 +8,10 @@
 syncignore.txt
 VarPro_resnet/cifar10_data/*
 VarPro_resnet/mnist_data/*
+VarPro_resnet/CIFAR10_SGD.py
+VarPro_resnet/CIFAR10_VarPro.py
 2TS_ReLU_1d_entropy/
+VarPro_cos_2d/
 
 # Ignore all Jupyter Notebook files except the root one
 *.ipynb
