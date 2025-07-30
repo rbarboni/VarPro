@@ -120,6 +120,7 @@ class LearningProblemTest():
         super().__init__()
         self.model = model
         self.state_list = [copy.deepcopy(self.model.state_dict())]
+        self.saving_idx = [0]
 
         # attributes for training
         self.train_loader = train_loader
@@ -133,20 +134,31 @@ class LearningProblemTest():
         if test_loader is not None and test_criterion is not None:
             self.test_loader = test_loader
             self.test_criterion = test_criterion
-            test_loss = evaluation_loop(self.model, self.test_loader, self.test_criterion)
-            self.test_loss_list = [test_loss]
-            print(f'0 epochs elapsed, evaluation loss={self.test_loss_list[-1]:.3f}')
+            self.test_loss_list = []
 
-    def train(self, epochs, progress=True, subprogress=False):
+            self.model.to(device)
+            self.model.eval()
+            loss_list = []
+            for inputs, targets in self.test_loader:
+                inputs, targets = inputs.to(device), targets.to(device)
+                outputs = self.model(inputs)
+                loss_list.append(self.test_criterion(outputs, targets).item())
+            self.test_loss_list.append(np.mean(loss_list).item())
+            self.test_idx = [0]
+            print(f'evaluation loss={self.test_loss_list[-1]:.3f}')
+            self.model.to(torch.device('cpu'))
+
+    def train(self, epochs, progress=True, subprogress=False, test=False):
         if subprogress:
             progress = False
+        if test:
+            assert hasattr(self, 'test_loader') and hasattr(self, 'test_criterion')
 
+        self.model.to(device)
         iterator = tqdm(range(epochs)) if progress else range(epochs)
         for epoch in iterator:
 
-            self.model.to(device)
             self.model.train()
-
             subiterator = tqdm(self.train_loader) if subprogress else self.train_loader
             for inputs, targets in subiterator:
                 inputs, targets = inputs.to(device), targets.to(device)
@@ -165,13 +177,24 @@ class LearningProblemTest():
                 self.grad_steps += 1
                 if self.grad_steps % self.saving_step == 0:
                     self.state_list.append(copy.deepcopy({k: v.cpu() for k, v in self.model.state_dict().items()}))
+                    self.saving_idx.append(self.grad_steps)
 
-            self.model.to(torch.device('cpu'))
+            if test:
+                self.model.eval()
+                loss_list = []
+                for inputs, targets in self.test_loader:
+                    inputs, targets = inputs.to(device), targets.to(device)
+                    outputs = self.model(inputs)
+                    loss_list.append(self.test_criterion(outputs, targets).item())
+                self.test_loss_list.append(np.mean(loss_list).item())
+                self.test_idx.append(self.grad_steps)
 
             if progress:
                 iterator.set_description(f'log10(loss) = {np.log10(self.loss_list[-1]):.2f}')
             elif epochs > 100 and (epoch+1) % (epochs // 100) == 0:
                 print(f'{100 * (epoch+1) / epochs:.0f}% elapsed, log10(loss)={np.log10(self.loss_list[-1]):.2f}')
+        
+        self.model.to(torch.device('cpu'))
                 
 
 ## Models
